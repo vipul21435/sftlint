@@ -198,3 +198,18 @@ def test_explicit_format_may_pick_a_lower_ranked_layout():
     assert [m.role for m in conv.messages] == ["user", "assistant"]
     with pytest.raises(FormatError):
         normalize(rec, "alpaca")
+
+
+def test_phi3_text_is_not_read_as_zephyr(write_jsonl):
+    from sftlint.cli import main
+    from sftlint.lint import lint
+    from sftlint.loader import load
+
+    text = "<|user|>\nWhat is 2+2?<|end|>\n<|assistant|>\n2+2 is 4.<|end|>\n<|endoftext|>"
+    assert detect_format({"text": text}) is None
+    path = write_jsonl([{"text": text}])
+    report = lint(load(path), str(path))
+    assert [f.rule for f in report.findings] == ["format-mismatch"]
+    assert main(["detect", str(path)]) == 1
+    zephyr = "<|user|>\nHi<|end|></s>\n<|assistant|>\nHello.</s>"
+    assert detect_format({"text": zephyr}) == "template-text"

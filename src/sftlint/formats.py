@@ -412,8 +412,16 @@ _TEMPLATE_MARKERS = {
 
 
 def _template_layout(text: str) -> str | None:
+    """The rendered layout of ``text``, or ``None`` when it is none of the three.
+
+    Phi-3 text uses the Zephyr role markers but ends turns with ``<|end|>``; read as
+    Zephyr, every final turn would look unterminated, so text with ``<|end|>`` and no
+    ``</s>`` is not taken for Zephyr.
+    """
     for name, marker in _TEMPLATE_MARKERS.items():
         if marker in text:
+            if name == "zephyr" and "<|end|>" in text and "</s>" not in text:
+                return None
             return name
     return None
 

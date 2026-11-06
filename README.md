@@ -273,7 +273,7 @@ An earlier version of `truncated-final` also flagged a Telugu answer key ending 
 
 Not implemented:
 
-- Inputs other than JSONL (no Parquet, no JSON arrays), and chat layouts other than the five above. Rendered template text is read for ChatML, Zephyr and Llama 3 only; Mistral and Llama 2 `[INST]` text is not parsed. The `template-text` reader is tested on fixtures only: no public rendered-text dataset with a licence stated on its card was run here.
+- Inputs other than JSONL (no Parquet, no JSON arrays), and chat layouts other than the five above. Rendered template text is read for ChatML, Zephyr and Llama 3 only; Mistral and Llama 2 `[INST]` text is not parsed, and Phi-3 text (Zephyr role markers with `<|end|>` and no `</s>`) is reported as `format-mismatch` rather than read as Zephyr. The `template-text` reader is tested on fixtures only: no public rendered-text dataset with a licence stated on its card was run here.
 - Tool declarations in formats other than `{"type": "function", "function": {...}}` and flat `{"name", "parameters"}`. JSON Schema `$ref`, `format`, `patternProperties` and conditionals are ignored by `tool-args-schema`.
 - Tool results are not checked against any declared return schema, and the content of a result is not read beyond its id and function name.
 - Language identification. `language-mix` compares scripts, so English answered in French, or Hindi answered in Marathi, is not caught; a translation task whose answer is meant to be in another script is flagged.
