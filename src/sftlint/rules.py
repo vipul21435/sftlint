@@ -148,7 +148,7 @@ _DANGLING_WORDS = frozenset(
     "a an the and or but of to in on for with by from as at is are was were that which "
     "because if then than".split()
 )
-_LAST_WORD = re.compile(r"([A-Za-z]+)\s*$")
+_LAST_WORD = re.compile(r"(?:^|\s)([A-Za-z]+)\s*$")
 
 
 def truncation_reason(text: str) -> str | None:
@@ -164,7 +164,8 @@ def truncation_reason(text: str) -> str | None:
         return None
     if stripped.count("```") % 2 == 1:
         return "unclosed code fence"
-    if stripped[-1] in _DANGLING_CHARS and not stripped.endswith(("--", ":)", ":-)")):
+    # "||" closes a verse in texts that write the danda as a pipe; ":)" is a smiley.
+    if stripped[-1] in _DANGLING_CHARS and not stripped.endswith(("--", ":)", ":-)", "||")):
         return f"ends with {stripped[-1]!r}"
     match = _LAST_WORD.search(stripped)
     if match and match.group(1).lower() in _DANGLING_WORDS:

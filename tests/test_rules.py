@@ -130,3 +130,17 @@ def test_truncated_final_reports_missing_end_token():
         {"text": "<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello.<|im_end|>"}
     )
     assert CHECKS["truncated-final"](ok) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Matches: i-b, ii-d, iii-c, iv-a", "first line|\n\nsecond line||"],
+)
+def test_truncation_ignores_answer_keys_and_verse_endings(text):
+    assert truncation_reason(text) is None
+
+
+def test_truncation_still_catches_a_dangling_article():
+    assert truncation_reason("He picked up a") == "ends with the word 'a'"
+    assert truncation_reason("a") == "ends with the word 'a'"
+    assert truncation_reason("one|") == "ends with '|'"
