@@ -161,7 +161,7 @@ Matches are masked in reports (first and last two characters kept), and each dis
 
 **Fix.** `--fix OUT --fix-rules a,b` writes a copy of the input. Records without a finding of a named rule are copied unchanged, line ending included (blank lines are not copied). `final-role` and `empty-turn` trim: `final-role` cuts the turns after the last assistant turn, `empty-turn` cuts trailing empty turns. A trim that would leave a record not ending in a non-empty assistant turn, or a record with no turn list (Alpaca, prompt/completion, rendered text), drops the record instead. Every other rule drops the records it flags. The copy is written to a temporary file next to `OUT` and moved into place when complete, so `OUT` may be the input file itself. The copy is not re-linted; run `sftlint check` on it again. The summary line counts each record under every named rule it has a finding of, so the per-rule counts overlap and can add up to more than the records dropped or trimmed.
 
-**Tests.** `uv run --with pytest-cov pytest -q --cov=sftlint` runs 189 offline tests in under a second and reports 99 % line coverage of `src/sftlint` (1,292 statements, 14 missed; no module below 97 %).
+**Tests.** `uv run --with pytest-cov pytest -q --cov=sftlint` runs 234 offline tests in under two seconds and reports 99 % line coverage of `src/sftlint` (1,338 statements, 11 missed; no module below 98 %).
 
 **Sources.** The rules and formats above follow these public documents:
 
