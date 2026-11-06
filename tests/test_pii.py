@@ -74,12 +74,54 @@ def test_find_secrets_prefixes_and_assignment():
     token = "ghp_" + rand(string.ascii_letters + string.digits, 36)
     pem = "-----BEGIN " + "RSA PRIVATE" + " KEY-----"
     value = rand(string.ascii_letters + string.digits, 32)
-    assert find_secrets(f"id {key_id}") == ["cloud access key id"]
-    assert find_secrets(token) == ["access token"]
-    assert find_secrets(pem) == ["private key"]
-    assert find_secrets(f'api_key = "{value}"') == ["high-entropy value assigned to 'api_key'"]
+    assert find_secrets(f"id {key_id}") == [("cloud access key id", key_id)]
+    assert find_secrets(token) == [("access token", token)]
+    assert find_secrets(pem) == [("private key", pem)]
+    assert find_secrets(f'api_key = "{value}"') == [
+        ("high-entropy value assigned to 'api_key'", value)
+    ]
     assert find_secrets("password: aaaaaaaaaaaaaaaaaaaaaaaa") == []  # low entropy
     assert find_secrets("token = short") == []
+
+
+ALNUM = string.ascii_letters + string.digits
+
+
+@pytest.mark.parametrize(
+    "label,build",
+    [
+        ("cloud API key", lambda: "AI" + "za" + rand(ALNUM + "_-", 35)),
+        ("model API key", lambda: "sk-" + rand(ALNUM, 20) + "T3Blbk" + "FJ" + rand(ALNUM, 20)),
+        ("model API key", lambda: "sk-" + "ant-api03-" + rand(ALNUM, 93) + "AA"),
+        ("model-hub access token", lambda: "hf" + "_" + rand(string.ascii_letters, 34)),
+        ("live payment API key", lambda: "sk" + "_live_" + rand(ALNUM, 24)),
+    ],
+)
+def test_more_secret_prefixes(label, build):
+    value = build()
+    assert find_secrets(f"key {value} end") == [(label, value)]
+
+
+def test_secret_prefix_near_misses():
+    assert find_secrets("sk" + "_test_" + rand(ALNUM, 24)) == []  # test-mode keys
+    assert find_secrets("hf" + "_" + rand(string.ascii_letters, 20)) == []  # too short
+    assert find_secrets("sk-" + rand(ALNUM, 40)) == []  # no marker
+
+
+def test_two_distinct_secrets_of_one_kind_are_both_reported():
+    a, b = ("ghp_" + rand(ALNUM, 36) for _ in range(2))
+    conv = normalize(
+        {
+            "messages": [
+                {"role": "user", "content": f"tokens {a} and {b}, again {a}"},
+                {"role": "assistant", "content": f"Revoke {b}."},
+            ]
+        }
+    )
+    found = check_secret_key(conv)
+    assert [f.turn for f in found] == [0, 0]
+    assert all(a not in f.message and b not in f.message for f in found)
+    assert found[0].message.startswith("access token gh")
 
 
 def test_rule_wrappers_report_turn_and_mask():

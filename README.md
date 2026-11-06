@@ -134,9 +134,9 @@ A record is flagged when `|M_i| > 3.5` (the cut-off the NIST handbook quotes fro
 
 - Email: domains reserved for documentation and testing by RFC 2606 and RFC 6761 (`example.com`, `.test`, `.invalid`, `localhost`) are skipped, as are local parts such as `your-email` or `recipient`.
 - Card numbers: digits may be grouped by single spaces or hyphens; the first digit must be 2 to 6 (the card-network industry identifiers of ISO/IEC 7812, which also keeps ISBN-13 numbers out), the digits must not all be the same, and the Luhn checksum must hold: double every second digit from the right, subtract 9 from any result above 9, and require the total to be divisible by 10.
-- Secrets: fixed prefixes (cloud access key ids, personal access tokens, chat-app bot tokens, PEM private-key headers) match directly. A value assigned to a name such as `api_key`, `token` or `password` must be at least 20 characters, mix at least two of lower case, upper case and digits, contain no placeholder word (`your`, `example`, `xxxx` ...), and have Shannon entropy `H = -sum p_c log2 p_c` of at least 3.5 bits per character.
+- Secrets: fixed prefixes match directly: cloud access key ids and API keys, personal access tokens, chat-app bot tokens, hosted-model API keys, model-hub access tokens, live payment API keys (test-mode keys are not flagged) and PEM private-key headers. The prefix shapes are simplified from the public gitleaks rule set (`config/gitleaks.toml`). A value assigned to a name such as `api_key`, `token` or `password` must be at least 20 characters, mix at least two of lower case, upper case and digits, contain no placeholder word (`your`, `example`, `xxxx` ...), and have Shannon entropy `H = -sum p_c log2 p_c` of at least 3.5 bits per character.
 
-Matches are masked in reports (first and last two characters kept), and each distinct match is reported once per conversation.
+Matches are masked in reports (first and last two characters kept), and each distinct matched value is reported once per conversation, so two different tokens of the same kind give two findings.
 
 **Tool calls.** `tool-args-schema` uses a small JSON Schema validator in `sftlint/schema.py` with no dependency. It implements the keywords tool declarations use in practice: `type`, `enum`, `const`, `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `anyOf`, `oneOf`, `allOf` and `nullable`. As in the JSON Schema validation vocabulary, `integer` matches any number with a zero fractional part, and booleans are not numbers. Other keywords (`$ref`, `format`, conditionals) are ignored, so the validator can miss errors but does not invent them. A property test draws 2,000 random JSON values and checks that each validates against its own type, an `enum` that contains it, and an `anyOf` that includes its type.
 
@@ -278,6 +278,7 @@ Known behaviour:
 - NIST/SEMATECH e-Handbook of Statistical Methods, 1.3.5.17 Detection of Outliers (modified z-score): https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm
 - Luhn algorithm: https://en.wikipedia.org/wiki/Luhn_algorithm
 - ISO/IEC 7812 (issuer identification numbers): https://en.wikipedia.org/wiki/ISO/IEC_7812
+- gitleaks, default secret-detection rules: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
 - RFC 2606, Reserved Top Level DNS Names: https://www.rfc-editor.org/rfc/rfc2606
 - RFC 6761, Special-Use Domain Names: https://www.rfc-editor.org/rfc/rfc6761
 

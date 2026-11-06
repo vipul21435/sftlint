@@ -9,8 +9,9 @@
   start with a digit from 2 to 6 (the card-network industry identifiers), pass the
   Luhn checksum, and do not consist of one repeated digit. A digit run that touches
   a letter, digit, underscore or hyphen is skipped as part of an identifier.
-* ``secret-key``: a string with a known credential prefix (cloud access key ids,
-  personal access tokens, chat-app bot tokens, PEM private-key headers), or a value
+* ``secret-key``: a string with a known credential prefix (cloud access key ids and
+  API keys, personal access tokens, chat-app bot tokens, hosted-model API keys,
+  model-hub tokens, live payment API keys, PEM private-key headers), or a value
   assigned to a key-like name (``api_key = ...``, ``token: ...``) that is at least 20
   characters long, mixes at least two of lower case, upper case and digits, contains
   no placeholder word (``your``, ``example``, ``xxxx`` ...), and has Shannon entropy
@@ -43,11 +44,21 @@ _CARD_FIRST_DIGITS = "23456"
 # name) is part of an identifier, not a card number written out.
 _CARD = re.compile(r"(?<![\w-])(?:\d[ -]?){12,18}\d(?![\w-])")
 
+# Prefix shapes follow the public gitleaks rule set (config/gitleaks.toml), simplified:
+# the fixed prefix and a minimum length are enough to keep false positives rare.
 _PREFIXED_SECRETS = [
     ("cloud access key id", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("cloud API key", re.compile(r"\bAIza[\w-]{35}(?![\w-])")),
     ("access token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
     ("access token", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{60,}\b")),
     ("bot token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b")),
+    ("model API key", re.compile(r"\bsk-ant-(?:api|admin)\d\d-[A-Za-z0-9_-]{80,}")),
+    (
+        "model API key",
+        re.compile(r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}T3BlbkFJ[A-Za-z0-9_-]{20,}"),
+    ),
+    ("model-hub access token", re.compile(r"\bhf_[A-Za-z]{34}\b")),
+    ("live payment API key", re.compile(r"\b(?:sk|rk)_live_[A-Za-z0-9]{10,99}\b")),
     ("private key", re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----")),
 ]
 _ASSIGNED_SECRET = re.compile(
@@ -122,13 +133,13 @@ def find_cards(text: str) -> list[str]:
     return out
 
 
-def find_secrets(text: str, min_entropy: float = 3.5) -> list[str]:
-    """Return a short description of each secret-like string found."""
-    out = [label for label, rx in _PREFIXED_SECRETS if rx.search(text)]
+def find_secrets(text: str, min_entropy: float = 3.5) -> list[tuple[str, str]]:
+    """Return ``(description, matched value)`` for each secret-like string found."""
+    out = [(label, m.group(0)) for label, rx in _PREFIXED_SECRETS for m in rx.finditer(text)]
     for m in _ASSIGNED_SECRET.finditer(text):
         name, value = m.group(1), m.group(2)
         if _looks_random(value) and shannon_entropy(value) >= min_entropy:
-            out.append(f"high-entropy value assigned to {name!r}")
+            out.append((f"high-entropy value assigned to {name!r}", value))
     return out
 
 
@@ -176,6 +187,12 @@ def check_pii_card(conv: Conversation) -> list[Finding]:
 
 @rule("secret-key", "error", "a turn contains a credential-shaped or high-entropy secret")
 def check_secret_key(conv: Conversation) -> list[Finding]:
-    return [
-        Finding("secret-key", "error", conv.line, s, i) for i, s in _first_seen(conv, find_secrets)
-    ]
+    seen: set[str] = set()
+    out = []
+    for i, m in enumerate(conv.messages):
+        for label, value in find_secrets(turn_text(m)):
+            if value not in seen:
+                seen.add(value)
+                message = label if label == "private key" else f"{label} {_mask(value)}"
+                out.append(Finding("secret-key", "error", conv.line, message, i))
+    return out
