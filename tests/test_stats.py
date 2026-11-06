@@ -169,3 +169,27 @@ def test_turn_text_includes_tool_calls():
     assert split_fields(c)["response"].startswith("Calling.")
     c.messages[1].content = ""
     assert turn_text(c.messages[1]) == '{"name": "f", "arguments": "{}"}'
+
+
+def _tool_record(tools, call_args=None):
+    msgs = [{"role": "user", "content": "Book me a table for two tonight."}]
+    if call_args is not None:
+        call = {"id": "c1", "function": {"name": "book_table", "arguments": call_args}}
+        msgs += [
+            {"role": "assistant", "content": None, "tool_calls": [call]},
+            {"role": "tool", "tool_call_id": "c1", "content": "ok"},
+        ]
+    msgs.append({"role": "assistant", "content": "Done."})
+    return {"messages": msgs, "tools": [{"name": t, "parameters": {}} for t in tools]}
+
+
+def test_duplicate_prompt_sees_declared_tools_and_call_arguments():
+    convs = [
+        normalize(_tool_record(["book_table"]), line=1),
+        normalize(_tool_record(["search_places"]), line=2),
+        normalize(_tool_record(["book_table"], '{"city": "Oslo"}'), line=3),
+        normalize(_tool_record(["book_table"], '{"city": "Bergen"}'), line=4),
+        normalize(_tool_record(["book_table"], '{"city": "Bergen"}'), line=5),
+    ]
+    out = check_duplicate_prompt(convs)
+    assert [(f.line, f.message) for f in out] == [(5, "same prompt as line 4")]

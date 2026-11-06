@@ -110,7 +110,7 @@ Tool calls are read from an OpenAI-style `tool_calls` list (arguments as a JSON 
 | `refusal` | info | a final answer whose first 300 characters contain a refusal phrase at a sentence start | a refusal rate far from what the set intends skews a model towards over- or under-refusing; the report gives the rate |
 | `refusal-rate` | error | the share of answers that open with a refusal phrase, when it is above `--max-refusal-rate` (off unless the flag is given) | a CI gate for the rate itself; one dataset-level finding, reported at line 0 |
 | `language-mix` | info | a final answer whose dominant script differs from the last user turn's | a question answered in another language is usually a generation or translation fault |
-| `duplicate-prompt` | warning | a record whose prompt (every turn before the final assistant turn, with roles, whitespace collapsed, case kept) equals an earlier record's | exact duplicates over-weight one prompt; near-duplicates are out of scope (see datasieve) |
+| `duplicate-prompt` | warning | a record whose prompt (every turn before the final assistant turn, with roles and tool calls, whitespace collapsed, case kept) and declared tools equal an earlier record's | exact duplicates over-weight one prompt; near-duplicates are out of scope (see datasieve) |
 | `length-outlier` | info | a prompt or response length that is a robust outlier for the file | catches empty-ish and runaway records without a fixed limit |
 | `pii-email` | warning | an email address outside reserved domains and placeholder local parts | personal data in training text |
 | `pii-card` | warning | 13 to 19 digits starting 2 to 6 that pass the Luhn checksum | payment card numbers |

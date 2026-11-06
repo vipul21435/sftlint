@@ -7,13 +7,14 @@ datasieve: https://github.com/vipul21435/datasieve
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections.abc import Sequence
 
 from sftlint.findings import Finding
 from sftlint.formats import Conversation
 from sftlint.rules import RULES, RuleInfo
-from sftlint.stats import length_table, modified_z
+from sftlint.stats import length_table, modified_z, turn_text
 
 DATASET_RULES = {
     "duplicate-prompt": RuleInfo(
@@ -27,21 +28,26 @@ RULES.update(DATASET_RULES)
 
 
 def prompt_key(conv: Conversation) -> str:
-    """Hash of every turn before the final assistant turn, roles included,
-    with whitespace collapsed. Case is kept: casing differences are real data."""
+    """Hash of every turn before the final assistant turn (roles and tool calls
+    included, whitespace collapsed) and of the declared tools. Case is kept: casing
+    differences are real data. The same request with different tools, or with
+    different arguments in an earlier call, is a different prompt."""
     msgs = conv.messages
     if msgs and msgs[-1].role == "assistant":
         msgs = msgs[:-1]
     h = hashlib.sha256()
+    h.update(json.dumps(conv.tools, sort_keys=True, default=str).encode())
+    h.update(b"\x02")
     for m in msgs:
         h.update(m.role.encode())
         h.update(b"\x00")
-        h.update(" ".join(m.content.split()).encode())
+        h.update(" ".join(turn_text(m).split()).encode())
         h.update(b"\x01")
     return h.hexdigest()
 
 
 def check_duplicate_prompt(convs: Sequence[Conversation]) -> list[Finding]:
+    """One finding per record whose :func:`prompt_key` equals an earlier record's."""
     first: dict[str, int] = {}
     out = []
     sev = DATASET_RULES["duplicate-prompt"].severity
