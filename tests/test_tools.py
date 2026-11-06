@@ -268,3 +268,12 @@ def test_envelope_with_object_content_still_names_its_call():
         "result 'z' answers no pending call",
         "call 'a' gets no result",
     ]
+
+
+def test_pending_call_after_a_final_tool_turn():
+    c = conv(U, asst(call("1", "weather", "{}"), call("2", "clock", "{}")), tool("1"))
+    assert [(f.turn, f.message) for f in check_tool_result_match(c)] == [
+        (1, "call 'clock' gets no result")
+    ]
+    ends_on_call = conv(U, asst(call("1", "weather", "{}"), call("2", "clock", "{}")))
+    assert check_tool_result_match(ends_on_call) == []
