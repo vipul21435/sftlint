@@ -109,3 +109,10 @@ def test_enum_and_const_compare_json_types():
     assert validate({"a": 0}, {"enum": [{"a": False}]}) != []
     assert validate({"a": 0}, {"enum": [{"a": 0.0}]}) == []
     assert validate(None, {"enum": [None]}) == [] and validate("x", {"const": "x"}) == []
+
+
+def test_null_fails_a_typed_schema_unless_nullable():
+    assert validate(None, {"type": "string"}) == ["$: expected string, got null"]
+    assert validate(None, {"type": "string", "nullable": True}) == []
+    assert validate(5, {"type": "string", "nullable": True}) == ["$: expected string, got integer"]
+    assert validate(None, {"type": "string", "nullable": False}) != []
