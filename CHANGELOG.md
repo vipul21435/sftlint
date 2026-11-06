@@ -11,4 +11,5 @@
 - PII and secret rules: `pii-email`, `pii-card` (Luhn), `pii-iban` (mod 97), `secret-key` (prefixes and entropy), reading tool-call arguments as well as text.
 - `sftlint check` with Markdown and JSON reports, `--select`, `--ignore`, `--fail-on` exit codes, `--fix` with `--fix-rules`, and `--tokenizer` (`pretokens` or optional tiktoken); `sftlint rules`; `sftlint detect`.
 - Per-field character, word and token length statistics.
-- Fetch script, length chart script, and measured results on public smoltalk and Hermes function-calling files.
+- Fetch script (backs off on HTTP 429, writes each file atomically), length chart script, a script that prints the Hermes tool-rule breakdowns, and measured results on public smoltalk, Hermes function-calling and Aya files.
+- Package-level exports: `lint`, `load`, `Report`, `Dataset`, `to_json`, `to_markdown`, `apply_fixes`, `FixResult`.
