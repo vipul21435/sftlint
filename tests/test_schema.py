@@ -137,3 +137,26 @@ def test_enum_of_arrays_against_a_scalar():
     assert validate([1, 2], {"enum": [[1, 2]]}) == []
     assert validate("ab", {"enum": [["a", "b"]]}) == ["$: 'ab' is not one of [['a', 'b']]"]
     assert validate(["a", "b"], {"enum": ["ab"]}) != []
+
+
+def test_one_of_with_an_ignored_keyword_does_not_report_two_matches():
+    # Under the full specification "not" makes the first branch fail for a string;
+    # the validator ignores "not", so it cannot tell, and stays silent.
+    schema = {"oneOf": [{"not": {"type": "string"}}, {"type": "string"}]}
+    assert validate("x", schema) == []
+    # With supported keywords only, two matches are reported, and zero always are.
+    exact = {"oneOf": [{"type": "string"}, {"type": "string", "description": "text"}]}
+    assert validate("x", exact) == ["$: matches 2 of oneOf, expected exactly 1"]
+    assert validate(1, schema | {"oneOf": [{"type": "string", "format": "date"}]}) == [
+        "$: matches 0 of oneOf, expected exactly 1"
+    ]
+
+
+def test_fully_supported_walks_subschemas():
+    from sftlint.schema import _fully_supported
+
+    assert _fully_supported({"type": "object", "properties": {"a": {"enum": [1]}}})
+    assert not _fully_supported({"properties": {"a": {"$ref": "#/x"}}})
+    assert not _fully_supported({"items": {"format": "date"}})
+    assert not _fully_supported({"anyOf": [{"not": {}}]})
+    assert _fully_supported(True) and not _fully_supported(False)

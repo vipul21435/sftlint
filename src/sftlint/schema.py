@@ -12,8 +12,11 @@ schema), ``minItems``, ``maxItems``, ``minLength``, ``maxLength``, ``pattern``,
 
 Every other keyword is ignored, which makes the validator lenient rather than strict:
 ``$ref``, ``format``, ``patternProperties``, ``dependentRequired`` and conditionals
-never cause an error. Following the JSON Schema validation vocabulary, ``integer``
-accepts whole-valued numbers, and booleans are not numbers.
+never cause an error. Inside ``oneOf``, where an ignored keyword could make a second
+branch match, "matches more than one" is reported only when every branch uses
+supported keywords alone (``not`` counts as ignored). Following the JSON Schema
+validation vocabulary, ``integer`` accepts whole-valued numbers, and booleans are not
+numbers.
 """
 
 from __future__ import annotations
@@ -57,6 +60,37 @@ def _type_name(value: Any) -> str:
         if _TYPES[name](value):
             return name
     return type(value).__name__
+
+
+_SUPPORTED = frozenset(
+    "type enum const properties required additionalProperties items minItems maxItems "
+    "minLength maxLength pattern minimum maximum exclusiveMinimum exclusiveMaximum "
+    "anyOf oneOf allOf nullable".split()
+)
+_ANNOTATIONS = frozenset(
+    "title description default examples deprecated readOnly writeOnly $comment $schema $id".split()
+)
+
+
+def _fully_supported(schema: Any, depth: int = 0) -> bool:
+    """Whether ``schema`` and its subschemas use only keywords this module checks
+    (annotations such as ``description`` are allowed), so that a pass is exact."""
+    if not isinstance(schema, Mapping):
+        return isinstance(schema, bool) and schema
+    if depth > 32 or any(k not in _SUPPORTED and k not in _ANNOTATIONS for k in schema):
+        return False
+    subs = (
+        list(schema.get("properties", {}).values())
+        if isinstance(schema.get("properties"), Mapping)
+        else []
+    )
+    for key in ("items", "additionalProperties"):
+        if isinstance(schema.get(key), Mapping):
+            subs.append(schema[key])
+    for key in ("anyOf", "oneOf", "allOf"):
+        if isinstance(schema.get(key), list):
+            subs += schema[key]
+    return all(_fully_supported(sub, depth + 1) for sub in subs)
 
 
 def _short(value: Any) -> str:
@@ -109,7 +143,9 @@ def validate(value: Any, schema: Any, path: str = "$", depth: int = 0) -> list[s
             errors += [e for r in results for e in r]
         elif key == "anyOf" and passed == 0:
             errors.append(f"{path}: matches none of anyOf")
-        elif key == "oneOf" and passed != 1:
+        elif key == "oneOf" and (
+            passed == 0 or (passed > 1 and all(_fully_supported(sub) for sub in subs))
+        ):
             errors.append(f"{path}: matches {passed} of oneOf, expected exactly 1")
     return errors
 
