@@ -172,7 +172,7 @@ def truncation_reason(text: str) -> str | None:
     (an unclosed code block); a final character that cannot end a sentence
     (comma, colon, open bracket, operator) unless the ending is a known complete
     form (see ``_closed_ending``); or a final word that is an article, conjunction
-    or preposition.
+    or preposition (a single capital ``A``, an answer label, does not count).
     """
     stripped = text.rstrip()
     if not stripped:
@@ -182,8 +182,10 @@ def truncation_reason(text: str) -> str | None:
     if stripped[-1] in _DANGLING_CHARS and not _closed_ending(stripped):
         return f"ends with {stripped[-1]!r}"
     match = _LAST_WORD.search(stripped)
-    if match and match.group(1).lower() in _DANGLING_WORDS:
-        return f"ends with the word {match.group(1)!r}"
+    word = match.group(1) if match else ""
+    # A lone capital letter is an answer label ("The answer is A", "Vitamin A").
+    if word.lower() in _DANGLING_WORDS and not (len(word) == 1 and word.isupper()):
+        return f"ends with the word {word!r}"
     return None
 
 

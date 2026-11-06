@@ -160,3 +160,13 @@ def test_truncation_still_catches_a_dangling_article():
     assert truncation_reason("x = a +") == "ends with '+'"
     assert truncation_reason("divide by /") == "ends with '/'"
     assert truncation_reason("Sources: https://example.org/a,") == "ends with ','"
+
+
+@pytest.mark.parametrize("text", ["The correct answer is A", "Answer: A", "Vitamin A", "(A)"])
+def test_single_capital_letter_answer_is_not_truncated(text):
+    assert truncation_reason(text) is None
+
+
+def test_lower_case_article_at_end_is_still_truncated():
+    assert truncation_reason("The answer is a") == "ends with the word 'a'"
+    assert truncation_reason("It depends on The") == "ends with the word 'The'"
