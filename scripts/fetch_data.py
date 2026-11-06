@@ -3,8 +3,8 @@
 * smoltalk, config smol-magpie-ultra, train split, first --rows rows, through the
   Hugging Face datasets-server rows API (100 rows per request). Licence: Apache 2.0
   for this subset, per https://huggingface.co/datasets/HuggingFaceTB/smoltalk
-* hermes-function-calling-v1, file func-calling-singleturn.json (about 18 MB).
-  Licence: Apache 2.0, per https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1
+* hermes-function-calling-v1, files func-calling-singleturn.json (about 18 MB) and
+  func-calling.json (about 21 MB, multi-turn with tool results). Licence: Apache 2.0, per https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1
 
 Writes JSONL files into --out (default: ./data, which .gitignore excludes). Only the
 fields the linter reads are kept; per-record ids are dropped.
@@ -22,10 +22,11 @@ import urllib.request
 from pathlib import Path
 
 ROWS_API = "https://datasets-server.huggingface.co/rows"
-HERMES_URL = (
-    "https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1/"
-    "resolve/main/func-calling-singleturn.json"
-)
+HERMES_BASE = "https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1/resolve/main"
+HERMES_FILES = {
+    "func-calling-singleturn.json": "hermes-func-calling-singleturn.jsonl",
+    "func-calling.json": "hermes-func-calling.jsonl",
+}
 
 
 def _get(url: str) -> bytes:
@@ -60,9 +61,9 @@ def fetch_smoltalk(out: Path, rows: int) -> Path:
     return path
 
 
-def fetch_hermes(out: Path) -> Path:
-    path = out / "hermes-func-calling-singleturn.jsonl"
-    records = json.loads(_get(HERMES_URL))
+def fetch_hermes(out: Path, source: str) -> Path:
+    path = out / HERMES_FILES[source]
+    records = json.loads(_get(f"{HERMES_BASE}/{source}"))
     with open(path, "w", encoding="utf-8") as fh:
         for rec in records:
             row = {"conversations": rec["conversations"], "tools": rec.get("tools")}
@@ -78,7 +79,8 @@ def main() -> None:
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    for path in (fetch_smoltalk(out, args.rows), fetch_hermes(out)):
+    paths = [fetch_smoltalk(out, args.rows)] + [fetch_hermes(out, f) for f in HERMES_FILES]
+    for path in paths:
         print(f"{path}: {path.stat().st_size} bytes")
 
 
