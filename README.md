@@ -150,7 +150,9 @@ Matches are masked in reports (first and last two characters kept), and each dis
 
 **Tokens.** Length statistics are reported in characters, whitespace words and tokens. The default token counter, `pretokens`, counts the pieces of GPT-2's pre-tokenization pattern, rewritten for the `re` module. GPT-2's BPE never merges across those pieces, so for GPT-2 the count is a lower bound, up to the places where `re` classes differ from `\p{L}` and `\p{N}` (some combining marks and non-decimal numerals). `--tokenizer tiktoken:<encoding>` counts real BPE tokens with tiktoken. A tool call counts as its `{"name", "arguments"}` JSON, since those are tokens the model is trained on.
 
-**Fix.** `--fix OUT --fix-rules a,b` writes a copy of the input. Records without a finding of a named rule are copied unchanged (blank lines are not copied). `final-role` and `empty-turn` trim: `final-role` cuts the turns after the last assistant turn, `empty-turn` cuts trailing empty turns. A trim that would leave a record not ending in a non-empty assistant turn, or a record with no turn list (Alpaca, prompt/completion, rendered text), drops the record instead. Every other rule drops the records it flags. The copy is not re-linted; run `sftlint check` on it again.
+**Fix.** `--fix OUT --fix-rules a,b` writes a copy of the input. Records without a finding of a named rule are copied unchanged (blank lines are not copied). `final-role` and `empty-turn` trim: `final-role` cuts the turns after the last assistant turn, `empty-turn` cuts trailing empty turns. A trim that would leave a record not ending in a non-empty assistant turn, or a record with no turn list (Alpaca, prompt/completion, rendered text), drops the record instead. Every other rule drops the records it flags. The copy is not re-linted; run `sftlint check` on it again. The summary line counts each record under every named rule it has a finding of, so the per-rule counts overlap and can add up to more than the records dropped or trimmed.
+
+**Tests.** `uv run --with pytest-cov pytest -q --cov=sftlint` runs 149 offline tests in under a second and reports 99 % line coverage of `src/sftlint` (1,235 statements, 15 missed; no module below 96 %).
 
 ## Results on public data
 
@@ -211,7 +213,7 @@ $ uv run sftlint check data/hermes-func-calling.fixed.jsonl --select final-role,
 data/hermes-func-calling.fixed.jsonl: 1725 records, format sharegpt, 0 with findings (0 errors, 0 warnings, 0 info)
 ```
 
-The 158 records that end on a tool turn are the same records whose tool turn answers calls that were not made, so they are dropped; the 5 others ending on a tool turn are trimmed back to their call turn.
+The 158 records that end on a tool turn are the same records whose tool turn answers calls that were not made, so they are dropped; the 5 others ending on a tool turn are trimmed back to their call turn. Those 158 records are counted under both `final-role` and `tool-result-match`, which is why the per-rule counts (158 + 10 + 158) add up to more than the 168 records dropped.
 
 **aya_dataset, test split, all 1,750 rows** ([dataset card](https://huggingface.co/datasets/CohereLabs/aya_dataset), Apache 2.0): human-written prompt/completion pairs, 250 in each of seven languages. Format detected: `prompt-completion`. The 10 `duplicate-prompt` findings are prompts written twice: 5 with the same answer both times, 5 with a different one. Of the 4 `truncated-final` findings, two Turkish answers end on a list separator after a heading or item, and one English answer ends "The following would be the cross:" with no cross after it; the fourth, a Portuguese list whose last item ends in `;`, is a false positive. The one `refusal` is "I won't answer that question." to a request for bomb-making instructions.
 
