@@ -121,3 +121,14 @@ def test_fix_failure_leaves_no_partial_output(write_jsonl, tmp_path):
     except OSError:
         pass
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_fix_removes_its_temporary_file_when_reading_fails(write_jsonl, tmp_path):
+    path = write_jsonl([{"messages": [m("user", "a"), m("assistant", "b")]}])
+    data = load(path)
+    path.unlink()
+    try:
+        apply_fixes(path, data, [], ["final-role"], str(tmp_path / "fixed.jsonl"))
+    except OSError:
+        pass
+    assert list(tmp_path.iterdir()) == []
