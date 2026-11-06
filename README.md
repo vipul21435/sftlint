@@ -239,12 +239,12 @@ An earlier version of `truncated-final` also flagged a Telugu answer key ending 
 
 Not implemented:
 
-- Inputs other than JSONL (no Parquet, no JSON arrays), and chat layouts other than the five above. Rendered template text is read for ChatML, Zephyr and Llama 3 only; Mistral `[INST]` text is not parsed.
+- Inputs other than JSONL (no Parquet, no JSON arrays), and chat layouts other than the five above. Rendered template text is read for ChatML, Zephyr and Llama 3 only; Mistral and Llama 2 `[INST]` text is not parsed. The `template-text` reader is tested on fixtures only: no public rendered-text dataset with a licence stated on its card was run here.
 - Tool declarations in formats other than `{"type": "function", "function": {...}}` and flat `{"name", "parameters"}`. JSON Schema `$ref`, `format`, `patternProperties` and conditionals are ignored by `tool-args-schema`.
 - Tool results are not checked against any declared return schema, and the content of a result is not read beyond its id and function name.
 - Language identification. `language-mix` compares scripts, so English answered in French, or Hindi answered in Marathi, is not caught; a translation task whose answer is meant to be in another script is flagged.
 - A refusal classifier. `refusal` is a phrase match: a refusal worded differently is missed, and a quoted refusal inside a longer answer near the start is counted.
-- `--fix` acts on whole records or trailing turns only; it never edits text inside a turn, never repairs tool-call JSON, and does not re-lint its output.
+- `--fix` acts on whole records or trailing turns only; it never edits text inside a turn, never repairs tool-call JSON, and does not re-lint its output. The dataset-level `refusal-rate` finding names no record, so `--fix` does nothing for it.
 - Near-duplicate detection and schema quarantine: see datasieve.
 
 Known behaviour:
