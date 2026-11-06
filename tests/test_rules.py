@@ -170,3 +170,19 @@ def test_single_capital_letter_answer_is_not_truncated(text):
 def test_lower_case_article_at_end_is_still_truncated():
     assert truncation_reason("The answer is a") == "ends with the word 'a'"
     assert truncation_reason("It depends on The") == "ends with the word 'The'"
+
+
+def test_empty_tool_result_is_not_an_empty_turn():
+    from sftlint.formats import normalize
+    from sftlint.rules import check_empty_turn
+
+    call = {"id": "c1", "function": {"name": "reset", "arguments": "{}"}}
+    rec = {
+        "messages": [
+            {"role": "user", "content": "Reset it."},
+            {"role": "assistant", "content": None, "tool_calls": [call]},
+            {"role": "tool", "tool_call_id": "c1", "content": ""},
+            {"role": "assistant", "content": ""},
+        ]
+    }
+    assert [f.turn for f in check_empty_turn(normalize(rec))] == [3]

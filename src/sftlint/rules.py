@@ -104,10 +104,13 @@ def check_role_order(conv: Conversation) -> list[Finding]:
     return out
 
 
-@rule("empty-turn", "error", "a turn has no text and no tool calls")
+@rule("empty-turn", "error", "a non-tool turn has no text and no tool calls")
 def check_empty_turn(conv: Conversation) -> list[Finding]:
+    """Tool turns are exempt: a function that returns nothing gives an empty result."""
     out = []
     for i, m in enumerate(conv.messages):
+        if m.role == "tool":
+            continue
         if not m.content.strip() and not m.tool_calls:
             what = "missing" if m.content_missing else "empty"
             out.append(_f("empty-turn", conv, f"{m.role} turn content is {what}", i))
