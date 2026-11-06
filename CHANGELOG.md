@@ -1,17 +1,24 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 - 2026-11-06
 
-- Format detection and normalisation for OpenAI / Hugging Face `messages`, ShareGPT, Alpaca, prompt/completion and text rendered by ChatML, Zephyr or Llama 3 chat templates, with per-file majority vote.
+### Added
+
+- Format detection and normalisation for OpenAI / Hugging Face `messages`, ShareGPT, Alpaca, prompt/completion and text rendered by ChatML, Zephyr or Llama 3 chat templates, with a per-file majority vote.
 - Tool calls read from `tool_calls` lists, ShareGPT `function_call` turns and `<tool_call>` tags; results from tool turns and `<tool_response>` tags; declared tools from `tools` or a `<tools>` block in the system prompt.
 - Structural rules: `role-unknown`, `system-position`, `role-order`, `empty-turn`, `duplicate-turn`, `final-role`, `truncated-final` (including a missing end-of-turn token in rendered text).
 - Tool rules: `tool-args-json`, `tool-unknown`, `tool-args-schema` (a dependency-free JSON Schema subset), `tool-result-match`.
-- Content rules: `refusal` (phrase match, with the refusal rate in the report), the `refusal-rate` gate behind `--max-refusal-rate`, and `language-mix` (dominant Unicode script of answer against user turn).
+- Content rules: `refusal` (phrase match, with the refusal rate in the report), the `refusal-rate` gate behind `--max-refusal-rate`, and `language-mix` (dominant Unicode script of the answer against the user turn).
 - Dataset rules: `duplicate-prompt` (exact) and `length-outlier` (modified z-score on log length).
-- PII and secret rules: `pii-email`, `pii-card` (Luhn), `pii-iban` (mod 97), `secret-key` (prefixes and entropy), reading tool-call arguments as well as text.
-- `sftlint check` with Markdown and JSON reports, `--select`, `--ignore`, `--fail-on` exit codes, `--fix` with `--fix-rules`, and `--tokenizer` (`pretokens` or optional tiktoken); `sftlint rules`; `sftlint detect`.
+- PII and secret rules: `pii-email`, `pii-card` (Luhn), `pii-iban` (mod 97) and `secret-key` (prefixes and entropy), reading tool-call arguments as well as text.
+- `sftlint check` with Markdown and JSON reports, `--select`, `--ignore`, `--fail-on` exit codes, `--min-records`, and `--tokenizer` (`pretokens`, or optional tiktoken).
+- `--fix` with `--fix-rules`, which drops whole records or trailing turns and writes through a temporary file, so the output may be the input.
+- `sftlint rules` and `sftlint detect` commands.
 - Per-field character, word and token length statistics.
-- Fetch script (backs off on HTTP 429, writes each file atomically), length chart script, a script that prints the Hermes tool-rule breakdowns, and measured results on public smoltalk, Hermes function-calling and Aya files.
-- Package-level exports: `lint`, `load`, `Report`, `Dataset`, `to_json`, `to_markdown`, `apply_fixes`, `FixResult`.
-- Fixes: `--fix` writes through a temporary file, so OUT may be the input; a UTF-8 byte-order mark is skipped; `<tool_response>` payload fields are no longer read as call ids; `secret-key` skips attribute paths and environment-variable names; `duplicate-prompt` includes declared tools and tool calls; `length-outlier` falls back to the mean absolute deviation when MAD is 0; `truncated-final` accepts a final capital `A`; empty tool results are not `empty-turn` findings; NaN and Infinity in tool arguments are invalid JSON; card numbers need digit groups of four (or 4-6-5 / 4-6-4); SSH remotes and documentation keys are skipped; narrower refusal phrases; half-width kana and modifier letters in the script detector; `--outlier-z` must be finite and above 0; internal errors and deep nesting give one-line messages; `--format` checks each record against that format's own shape; `lint` accepts a rule-id string and `load` rejects unknown formats.
-- More fixes: `truncated-final` pairs code fences by line and backtick count; a `<tool_response>` is read as an envelope only when its keys and content fit one, so a payload with `name` and `content` fields is matched by position; refusals that open with an apology or hedge ("I'm sorry, I can't assist") count; Phi-3 rendered text is a `format-mismatch` rather than Zephyr; image-only turns are not `empty-turn`; `--fix` keeps each line's own ending; an assigned secret value may hold symbols; a card number written two ways is one finding; `check` exits 1 when fewer than `--min-records` records (default 1) were read.
+- Python API: `lint`, `load`, `Report`, `Dataset`, `to_json`, `to_markdown`, `apply_fixes`, `FixResult`.
+- Scripts for results on public data: a fetch script (backs off on HTTP 429, writes each file atomically), a length chart script, a script by language, and a script that prints the Hermes tool-rule breakdowns. Measured results on public smoltalk, Hermes function-calling and Aya files are in the README.
+- README with install, quickstart, how the checks work, results on public data, limitations and related tools.
+
+### Known limitations
+
+See the Limitations section of the README for what is not implemented (other input formats, language identification, a refusal classifier, near-duplicate detection) and for the heuristic behaviour of several rules.
