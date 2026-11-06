@@ -11,11 +11,19 @@ Supported layouts:
   and ``observation`` turns become tool results.
 * ``alpaca``: ``instruction``, optional ``input`` and ``output`` strings.
 * ``prompt-completion``: ``prompt`` and ``completion`` strings.
+
+Tool calls are normalised to :class:`ToolCall` whatever their source: an OpenAI
+``tool_calls`` list (or the older ``function_call`` field), a ShareGPT
+``function_call`` turn, or ``<tool_call>{...}</tool_call>`` blocks inside assistant
+text, the layout of the Hermes function-calling data. ``<tool_response>`` blocks in a
+tool turn become :class:`ToolResult` entries, and a ``<tools>[...]</tools>`` block in
+the system prompt is read as the declared tools when the record has no ``tools`` field.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -55,6 +63,30 @@ _SHAREGPT_ROLE_MAP = {
 
 
 @dataclass
+class ToolCall:
+    """One call an assistant turn makes.
+
+    ``arguments`` is what the source holds: a JSON string in the OpenAI format, an
+    object in most other layouts. ``parse_error`` is set when the call itself could
+    not be read (for example a ``<tool_call>`` body that is not JSON).
+    """
+
+    name: str | None
+    arguments: Any = None
+    id: str | None = None
+    parse_error: str | None = None
+
+
+@dataclass
+class ToolResult:
+    """One result inside a tool turn: the call id and function name it answers, when given."""
+
+    id: str | None = None
+    name: str | None = None
+    parse_error: str | None = None
+
+
+@dataclass
 class Message:
     """One turn after normalisation.
 
@@ -65,10 +97,17 @@ class Message:
     role: str
     content: str
     raw_role: str = ""
-    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    tool_calls: list[ToolCall] = field(default_factory=list)
     tool_call_id: str | None = None
     name: str | None = None
     content_missing: bool = False
+    tool_results: list[ToolResult] = field(default_factory=list)
+
+    def results(self) -> list[ToolResult]:
+        """The results a tool turn carries: tagged blocks, else one from its id and name."""
+        if self.tool_results:
+            return self.tool_results
+        return [ToolResult(self.tool_call_id, self.name)]
 
 
 @dataclass
@@ -140,21 +179,83 @@ def _text(content: Any) -> tuple[str, bool]:
     return json.dumps(content, ensure_ascii=False), False
 
 
-def _parse_function_call(value: str) -> list[dict[str, Any]]:
-    """Turn a ShareGPT ``function_call`` value into OpenAI-style tool calls."""
+def _call_from_obj(item: Any) -> ToolCall:
+    """Read one call from a ``{"name", "arguments"}`` object (or OpenAI's nested form)."""
+    if not isinstance(item, Mapping):
+        return ToolCall(None, item, parse_error="call is not a JSON object")
+    fn = item.get("function")
+    if isinstance(fn, Mapping):
+        return ToolCall(fn.get("name"), fn.get("arguments"), id=item.get("id"))
+    args = item.get("arguments", item.get("parameters"))
+    return ToolCall(item.get("name"), args, id=item.get("id"))
+
+
+def _parse_function_call(value: str) -> list[ToolCall]:
+    """Turn a ShareGPT ``function_call`` value into tool calls."""
     try:
         obj = json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return [{"function": {"name": None, "arguments": value}, "_unparsed": True}]
+    except (json.JSONDecodeError, TypeError) as exc:
+        return [ToolCall(None, value, parse_error=f"invalid JSON: {exc}")]
     items = obj if isinstance(obj, list) else [obj]
+    return [_call_from_obj(item) for item in items]
+
+
+_TAG = {
+    name: re.compile(rf"<{name}>\s*(.*?)\s*(?:</{name}>|$)", re.DOTALL)
+    for name in ("tool_call", "tool_response", "tools")
+}
+
+
+def _tag_bodies(text: str, tag: str) -> list[str]:
+    return [m.group(1) for m in _TAG[tag].finditer(text)] if f"<{tag}>" in text else []
+
+
+def _strip_tags(text: str, tag: str) -> str:
+    return _TAG[tag].sub("", text).strip()
+
+
+def parse_tagged_calls(text: str) -> tuple[list[ToolCall], str]:
+    """Extract ``<tool_call>`` blocks from assistant text. Returns (calls, remaining text).
+
+    A block with no closing tag runs to the end of the text, so a cut-off call is
+    still reported (as a parse error) rather than lost.
+    """
+    bodies = _tag_bodies(text, "tool_call")
+    if not bodies:
+        return [], text
     calls = []
-    for item in items:
-        if not isinstance(item, Mapping):
-            calls.append({"function": {"name": None, "arguments": item}, "_unparsed": True})
+    for body in bodies:
+        try:
+            calls.append(_call_from_obj(json.loads(body)))
+        except json.JSONDecodeError as exc:
+            calls.append(ToolCall(None, body, parse_error=f"invalid JSON: {exc.msg}"))
+    return calls, _strip_tags(text, "tool_call")
+
+
+def parse_tagged_results(text: str) -> list[ToolResult]:
+    """Extract ``<tool_response>`` blocks from a tool turn."""
+    out = []
+    for body in _tag_bodies(text, "tool_response"):
+        try:
+            obj = json.loads(body)
+        except json.JSONDecodeError as exc:
+            out.append(ToolResult(parse_error=f"invalid JSON: {exc.msg}"))
             continue
-        args = item.get("arguments", item.get("parameters", {}))
-        calls.append({"function": {"name": item.get("name"), "arguments": args}})
-    return calls
+        if isinstance(obj, Mapping):
+            out.append(ToolResult(obj.get("tool_call_id", obj.get("id")), obj.get("name")))
+        else:
+            out.append(ToolResult())
+    return out
+
+
+def _apply_tags(msg: Message) -> Message:
+    if msg.role == "assistant" and not msg.tool_calls:
+        calls, rest = parse_tagged_calls(msg.content)
+        if calls:
+            msg.tool_calls, msg.content = calls, rest
+    elif msg.role == "tool":
+        msg.tool_results = parse_tagged_results(msg.content)
+    return msg
 
 
 def _messages(record: Mapping[str, Any]) -> list[Message]:
@@ -164,20 +265,20 @@ def _messages(record: Mapping[str, Any]) -> list[Message]:
         raw_role = str(m.get("role", ""))
         role = _MESSAGES_ROLE_MAP.get(raw_role.lower(), raw_role)
         text, missing = _text(m.get("content"))
-        calls = m.get("tool_calls") or []
-        if not calls and isinstance(m.get("function_call"), Mapping):
-            calls = [{"function": dict(m["function_call"])}]
-        out.append(
-            Message(
-                role=role,
-                content=text,
-                raw_role=raw_role,
-                tool_calls=list(calls) if isinstance(calls, list) else [],
-                tool_call_id=m.get("tool_call_id"),
-                name=m.get("name"),
-                content_missing=missing,
-            )
+        raw_calls = m.get("tool_calls") or []
+        if not raw_calls and isinstance(m.get("function_call"), Mapping):
+            raw_calls = [{"function": m["function_call"]}]
+        calls = [_call_from_obj(c) for c in raw_calls] if isinstance(raw_calls, list) else []
+        msg = Message(
+            role=role,
+            content=text,
+            raw_role=raw_role,
+            tool_calls=calls,
+            tool_call_id=m.get("tool_call_id"),
+            name=m.get("name"),
+            content_missing=missing,
         )
+        out.append(_apply_tags(msg))
     return out
 
 
@@ -188,13 +289,12 @@ def _sharegpt(record: Mapping[str, Any]) -> list[Message]:
         raw_role = str(m.get("from", ""))
         role = _SHAREGPT_ROLE_MAP.get(raw_role.lower(), raw_role)
         text, missing = _text(m.get("value"))
-        calls: list[dict[str, Any]] = []
+        calls: list[ToolCall] = []
         if raw_role.lower() == "function_call":
             calls = _parse_function_call(text)
             text = ""
-        out.append(
-            Message(role, text, raw_role=raw_role, tool_calls=calls, content_missing=missing)
-        )
+        msg = Message(role, text, raw_role=raw_role, tool_calls=calls, content_missing=missing)
+        out.append(_apply_tags(msg))
     if isinstance(record.get("system"), str) and record["system"].strip():
         out.insert(0, Message("system", record["system"], raw_role="system"))
     return out
@@ -236,16 +336,23 @@ def normalize(record: Mapping[str, Any], fmt: str | None = None, line: int = 0) 
         raise FormatError("record matches none of: " + ", ".join(FORMATS))
     if detected != fmt:
         raise FormatError(f"record does not match format {fmt!r}")
-    tools = record.get("tools")
-    if isinstance(tools, str):
+    messages = _NORMALISERS[fmt](record)
+    tools = _load_tools(record.get("tools"))
+    if tools is None:
+        for m in messages:
+            if m.role == "system":
+                bodies = _tag_bodies(m.content, "tools")
+                tools = _load_tools(bodies[0]) if bodies else None
+                break
+    return Conversation(messages=messages, fmt=fmt, line=line, tools=tools, raw=record)
+
+
+def _load_tools(value: Any) -> list[dict[str, Any]] | None:
+    if isinstance(value, str):
         try:
-            tools = json.loads(tools)
+            value = json.loads(value)
         except json.JSONDecodeError:
-            tools = None
-    return Conversation(
-        messages=_NORMALISERS[fmt](record),
-        fmt=fmt,
-        line=line,
-        tools=tools if isinstance(tools, list) else None,
-        raw=record,
-    )
+            return None
+    if isinstance(value, list) and all(isinstance(t, Mapping) for t in value):
+        return list(value)
+    return None
