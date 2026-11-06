@@ -13,6 +13,7 @@ from sftlint.lint import lint
 from sftlint.loader import load
 from sftlint.report import to_json, to_markdown
 from sftlint.rules import RULES
+from sftlint.tokens import get_counter
 
 
 def _ids(value: str) -> list[str]:
@@ -43,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--outlier-z", type=float, default=3.5, help="modified z threshold (default 3.5)"
     )
     check.add_argument(
+        "--tokenizer",
+        default="pretokens",
+        help="token counter for length stats: pretokens (default) or tiktoken:<encoding>",
+    )
+    check.add_argument(
         "--max-examples", type=int, default=20, help="findings listed in reports (default 20)"
     )
 
@@ -64,8 +70,11 @@ def _write(target: str, text: str) -> None:
 
 def _cmd_check(args: argparse.Namespace) -> int:
     try:
+        counter = get_counter(args.tokenizer)
         data = load(args.path, args.format)
-        report = lint(data, args.path, args.select, args.ignore, args.outlier_z)
+        report = lint(
+            data, args.path, args.select, args.ignore, args.outlier_z, counter, args.tokenizer
+        )
     except (OSError, ValueError) as exc:
         print(f"sftlint: {exc}", file=sys.stderr)
         return 2

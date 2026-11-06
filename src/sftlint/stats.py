@@ -1,8 +1,10 @@
 """Per-field length statistics and robust outlier scores.
 
 Fields are ``prompt`` (every turn before the final assistant turn, joined) and
-``response`` (the final assistant turn). Lengths are counted in characters and in
-whitespace-separated words; words are a cheap stand-in for tokens, not a tokenizer.
+``response`` (the final assistant turn). A turn's text includes its tool calls,
+serialised as JSON, since those are tokens the model is trained on. Lengths are
+counted in characters, whitespace-separated words and tokens (see
+:mod:`sftlint.tokens`; the default counter is a GPT-2-style pre-tokenizer).
 
 Outliers use the modified z-score of Iglewicz and Hoaglin on ``log1p(length)``::
 
@@ -16,20 +18,33 @@ deviation would.
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Sequence
 
-from sftlint.formats import Conversation
+from sftlint.formats import Conversation, Message
+from sftlint.tokens import TokenCounter, pretokens
+
+
+def turn_text(m: Message) -> str:
+    """The text of a turn plus each tool call as ``{"name", "arguments"}`` JSON."""
+    if not m.tool_calls:
+        return m.content
+    calls = [
+        json.dumps({"name": c.name, "arguments": c.arguments}, ensure_ascii=False, default=str)
+        for c in m.tool_calls
+    ]
+    return "\n".join([m.content, *calls]) if m.content else "\n".join(calls)
 
 
 def split_fields(conv: Conversation) -> dict[str, str]:
     """Return the ``prompt`` and ``response`` text of a conversation."""
     msgs = conv.messages
     if msgs and msgs[-1].role == "assistant":
-        prompt_msgs, response = msgs[:-1], msgs[-1].content
+        prompt_msgs, response = msgs[:-1], turn_text(msgs[-1])
     else:
         prompt_msgs, response = msgs, ""
-    prompt = "\n".join(m.content for m in prompt_msgs)
+    prompt = "\n".join(turn_text(m) for m in prompt_msgs)
     return {"prompt": prompt, "response": response}
 
 
@@ -71,21 +86,31 @@ def modified_z(values: Sequence[float]) -> list[float]:
     return [0.6745 * (v - med) / mad for v in values]
 
 
-def length_table(convs: Sequence[Conversation]) -> dict[str, dict[str, list[int]]]:
-    """Per field, the character and word length of every conversation (in order)."""
+def length_table(
+    convs: Sequence[Conversation], count_tokens: TokenCounter | None = None
+) -> dict[str, dict[str, list[int]]]:
+    """Per field, the character, word and token length of every conversation (in order).
+
+    ``count_tokens=None`` skips the token column (the outlier rule needs only chars).
+    """
+    units = ("chars", "words", "tokens") if count_tokens else ("chars", "words")
     table: dict[str, dict[str, list[int]]] = {
-        f: {"chars": [], "words": []} for f in ("prompt", "response")
+        f: {u: [] for u in units} for f in ("prompt", "response")
     }
     for conv in convs:
         for name, text in split_fields(conv).items():
             table[name]["chars"].append(len(text))
             table[name]["words"].append(len(text.split()))
+            if count_tokens:
+                table[name]["tokens"].append(count_tokens(text))
     return table
 
 
-def length_stats(convs: Sequence[Conversation]) -> dict[str, dict[str, dict[str, float]]]:
+def length_stats(
+    convs: Sequence[Conversation], count_tokens: TokenCounter | None = pretokens
+) -> dict[str, dict[str, dict[str, float]]]:
     """Summary statistics of :func:`length_table`."""
     return {
         name: {unit: summary(vals) for unit, vals in units.items()}
-        for name, units in length_table(convs).items()
+        for name, units in length_table(convs, count_tokens).items()
     }

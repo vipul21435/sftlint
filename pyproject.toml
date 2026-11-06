@@ -20,6 +20,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
+tiktoken = ["tiktoken>=0.7"]
 
 [project.scripts]
 sftlint = "sftlint.cli:main"

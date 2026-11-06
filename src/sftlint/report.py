@@ -62,6 +62,8 @@ def to_markdown(report: Report, max_examples: int = 20) -> str:
             "",
             "## Lengths",
             "",
+            f"Tokens counted with `{report.stats.get('tokenizer', 'pretokens')}`.",
+            "",
             "| field | unit | mean | p50 | p90 | p99 | max |",
             "|---|---|---:|---:|---:|---:|---:|",
         ]

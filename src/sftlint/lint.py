@@ -12,6 +12,7 @@ from sftlint.findings import Finding, severity_rank
 from sftlint.loader import Dataset
 from sftlint.rules import CHECKS, RULES
 from sftlint.stats import length_stats
+from sftlint.tokens import TokenCounter, pretokens
 
 
 @dataclass
@@ -57,6 +58,8 @@ def lint(
     select: Iterable[str] | None = None,
     ignore: Iterable[str] | None = None,
     outlier_z: float = 3.5,
+    count_tokens: TokenCounter = pretokens,
+    tokenizer: str = "pretokens",
 ) -> Report:
     """Lint ``data`` and return a :class:`Report` with findings sorted by line."""
     rules = selected_rules(select, ignore)
@@ -75,5 +78,5 @@ def lint(
         fmt=data.fmt,
         records=data.records,
         findings=findings,
-        stats={"lengths": length_stats(data.conversations)},
+        stats={"tokenizer": tokenizer, "lengths": length_stats(data.conversations, count_tokens)},
     )

@@ -5,7 +5,15 @@ import pytest
 
 from sftlint.dataset_rules import check_duplicate_prompt, check_length_outlier, prompt_key
 from sftlint.formats import normalize
-from sftlint.stats import length_stats, modified_z, quantile, split_fields, summary
+from sftlint.stats import (
+    length_stats,
+    modified_z,
+    quantile,
+    split_fields,
+    summary,
+    turn_text,
+)
+from sftlint.tokens import get_counter, pretokens
 
 
 def pc(prompt, completion, line=1):
@@ -84,3 +92,80 @@ def test_length_outlier_flags_long_and_short():
     out = check_length_outlier(convs)
     got = {(f.line, f.message.split(":")[0]) for f in out}
     assert got == {(100, "prompt is long"), (101, "response is short")}
+
+
+def test_length_stats_has_tokens():
+    st = length_stats([pc("Hello, world!", "ok")])
+    assert st["prompt"]["tokens"]["max"] == 4
+    assert "tokens" not in length_stats([pc("a", "b")], None)["prompt"]
+
+
+def test_pretokens_follow_gpt2_pieces():
+    assert pretokens("") == 0
+    assert pretokens("Hello world") == 2
+    assert pretokens("it's 2026!") == 4  # "it", "'s", " 2026", "!"
+    assert pretokens("a_b") == 3
+    assert pretokens("x    y") == 3
+
+
+def test_pretokens_never_exceed_chars():
+    import random
+
+    rng = random.Random(3)
+    for _ in range(500):
+        s = "".join(rng.choice("ab 1,_\n'é") for _ in range(rng.randint(0, 40)))
+        assert pretokens(s) <= len(s)
+
+
+def test_get_counter():
+    assert get_counter() is pretokens
+    with pytest.raises(ValueError, match="unknown tokenizer"):
+        get_counter("bpe")
+
+
+def test_tiktoken_counter_missing_or_present(monkeypatch):
+    import builtins
+
+    real = builtins.__import__
+
+    def fake(name, *a, **k):
+        if name == "tiktoken":
+            raise ImportError
+        return real(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", fake)
+    with pytest.raises(ValueError, match="pip install tiktoken"):
+        get_counter("tiktoken:cl100k_base")
+
+
+def test_tiktoken_counter_uses_encoding(monkeypatch):
+    import sys
+    import types
+
+    class Enc:
+        def encode(self, text, disallowed_special=()):
+            return text.split()
+
+    mod = types.SimpleNamespace(get_encoding=lambda name: Enc())
+    monkeypatch.setitem(sys.modules, "tiktoken", types.ModuleType("tiktoken"))
+    monkeypatch.setattr(sys.modules["tiktoken"], "get_encoding", mod.get_encoding, raising=False)
+    assert get_counter("tiktoken:any")("a b c") == 3
+
+
+def test_turn_text_includes_tool_calls():
+    c = normalize(
+        {
+            "messages": [
+                {"role": "user", "content": "q"},
+                {
+                    "role": "assistant",
+                    "content": "Calling.",
+                    "tool_calls": [{"function": {"name": "f", "arguments": "{}"}}],
+                },
+            ]
+        }
+    )
+    assert turn_text(c.messages[1]) == 'Calling.\n{"name": "f", "arguments": "{}"}'
+    assert split_fields(c)["response"].startswith("Calling.")
+    c.messages[1].content = ""
+    assert turn_text(c.messages[1]) == '{"name": "f", "arguments": "{}"}'
