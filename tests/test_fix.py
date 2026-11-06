@@ -132,3 +132,10 @@ def test_fix_removes_its_temporary_file_when_reading_fails(write_jsonl, tmp_path
     except OSError:
         pass
     assert list(tmp_path.iterdir()) == []
+
+
+def test_empty_turn_trim_keeps_a_later_image_turn(write_jsonl, tmp_path):
+    image = {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "u"}}]}
+    rows = [{"messages": [m("user", "q"), m("assistant", "a"), m("assistant", ""), image]}]
+    result, lines = run_fix(write_jsonl, tmp_path, rows, ["empty-turn"])
+    assert lines == [] and result.records_dropped == 1 and result.records_trimmed == 0

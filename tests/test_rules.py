@@ -213,3 +213,24 @@ def test_fences_pair_by_line_and_length(text):
 )
 def test_unclosed_fence_is_flagged(text):
     assert truncation_reason(text) == "unclosed code fence"
+
+
+def test_image_only_turn_is_not_empty(write_jsonl):
+    from sftlint.cli import main
+
+    image = {"type": "image_url", "image_url": {"url": "https://example.com/dog.png"}}
+    c = conv({"role": "user", "content": [image]}, ("assistant", "A dog."))
+    assert c.messages[0].has_media and run("empty-turn", c) == []
+    blank = conv({"role": "user", "content": [{"type": "text", "text": " "}]}, ("assistant", "x"))
+    assert [f.turn for f in run("empty-turn", blank)] == [0]
+    path = write_jsonl(
+        [
+            {
+                "messages": [
+                    {"role": "user", "content": [image]},
+                    {"role": "assistant", "content": "A dog."},
+                ]
+            }
+        ]
+    )
+    assert main(["check", str(path)]) == 0

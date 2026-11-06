@@ -113,6 +113,7 @@ class Message:
     tool_results: list[ToolResult] = field(default_factory=list)
     source_index: int | None = None  # position in the record's turn list, when it has one
     unterminated: bool = False  # rendered text only: no end-of-turn token after this turn
+    has_media: bool = False  # list content with a part that is not text (an image, audio)
 
     def results(self) -> list[ToolResult]:
         """The results a tool turn carries: tagged blocks, else one from its id and name."""
@@ -217,6 +218,13 @@ def _text(content: Any) -> tuple[str, bool]:
                 parts.append(part["text"])
         return "".join(parts), False
     return json.dumps(content, ensure_ascii=False), False
+
+
+def _has_media(content: Any) -> bool:
+    """Whether list content has a part other than text, such as an ``image_url`` part."""
+    return isinstance(content, list) and any(
+        isinstance(part, Mapping) and part.get("type", "text") != "text" for part in content
+    )
 
 
 def _call_from_obj(item: Any) -> ToolCall:
@@ -347,6 +355,7 @@ def _messages(record: Mapping[str, Any]) -> list[Message]:
             name=m.get("name"),
             content_missing=missing,
             source_index=idx,
+            has_media=_has_media(m.get("content")),
         )
         out.append(_apply_tags(msg))
     return out
@@ -363,7 +372,15 @@ def _sharegpt(record: Mapping[str, Any]) -> list[Message]:
         if raw_role.lower() == "function_call":
             calls = _parse_function_call(text)
             text = ""
-        msg = Message(role, text, raw_role, calls, content_missing=missing, source_index=idx)
+        msg = Message(
+            role,
+            text,
+            raw_role,
+            calls,
+            content_missing=missing,
+            source_index=idx,
+            has_media=_has_media(m.get("value")),
+        )
         out.append(_apply_tags(msg))
     if isinstance(record.get("system"), str) and record["system"].strip():
         out.insert(0, Message("system", record["system"], raw_role="system"))

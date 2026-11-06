@@ -71,7 +71,7 @@ def _cut_point(conv: Conversation, findings: list[Finding]) -> int | None:
             cut = min(cut, last + 1)
         elif f.rule == "empty-turn" and f.turn is not None:
             tail = msgs[f.turn :]
-            if any(m.content.strip() or m.tool_calls for m in tail):
+            if any(m.content.strip() or m.tool_calls or m.has_media for m in tail):
                 return None
             cut = min(cut, f.turn)
     kept = msgs[:cut]
