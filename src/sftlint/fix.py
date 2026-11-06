@@ -20,10 +20,13 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import tempfile
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TextIO
 
 from sftlint.findings import Finding
 from sftlint.formats import Conversation
@@ -84,7 +87,12 @@ def _cut_point(conv: Conversation, findings: list[Finding]) -> int | None:
 def apply_fixes(
     path: str | Path, data: Dataset, findings: Iterable[Finding], rules: Iterable[str], out: str
 ) -> FixResult:
-    """Write the fixed copy of ``path`` to ``out`` and return what was done."""
+    """Write the fixed copy of ``path`` to ``out`` and return what was done.
+
+    The copy is written to a temporary file next to ``out`` and moved into place only
+    when it is complete, so ``out`` may be ``path`` itself and a failed run leaves no
+    partial file behind.
+    """
     wanted = set(rules)
     by_line: dict[int, list[Finding]] = defaultdict(list)
     for f in findings:
@@ -92,29 +100,49 @@ def apply_fixes(
             by_line[f.line].append(f)
     convs = {c.line: c for c in data.conversations}
     result = FixResult()
-    with open(path, encoding="utf-8") as src, open(out, "w", encoding="utf-8") as dst:
-        for lineno, text in enumerate(src, start=1):
-            if not text.strip():
-                continue
-            hits = by_line.get(lineno)
-            if not hits:
-                dst.write(text if text.endswith("\n") else text + "\n")
-                result.written += 1
-                continue
-            drops = sorted({f.rule for f in hits if fix_action(f.rule) == "drop"})
-            conv = convs.get(lineno)
-            rule_ids = sorted({f.rule for f in hits})
-            cut = None if drops or conv is None else _cut_point(conv, hits)
-            if cut is None or conv is None or conv.turns_key is None:
-                result.records_dropped += 1
-                result.dropped.update(rule_ids)
-                continue
-            record = copy.deepcopy(dict(conv.raw or {}))
-            first_cut = conv.messages[cut].source_index if cut < len(conv.messages) else None
-            if first_cut is not None:
-                record[conv.turns_key] = record[conv.turns_key][:first_cut]
-            dst.write(json.dumps(record, ensure_ascii=False) + "\n")
-            result.written += 1
-            result.records_trimmed += 1
-            result.trimmed.update(rule_ids)
+    out_dir = os.path.dirname(os.path.abspath(out))
+    fd, tmp = tempfile.mkstemp(prefix=".sftlint-", suffix=".tmp", dir=out_dir)
+    try:
+        with open(path, encoding="utf-8") as src, open(fd, "w", encoding="utf-8") as dst:
+            _copy_fixed(src, dst, by_line, convs, result)
+        umask = os.umask(0)
+        os.umask(umask)
+        os.chmod(tmp, 0o666 & ~umask)
+        os.replace(tmp, out)
+    except BaseException:
+        os.unlink(tmp)
+        raise
     return result
+
+
+def _copy_fixed(
+    src: Iterable[str],
+    dst: TextIO,
+    by_line: dict[int, list[Finding]],
+    convs: dict[int, Conversation],
+    result: FixResult,
+) -> None:
+    for lineno, text in enumerate(src, start=1):
+        if not text.strip():
+            continue
+        hits = by_line.get(lineno)
+        if not hits:
+            dst.write(text if text.endswith("\n") else text + "\n")
+            result.written += 1
+            continue
+        drops = sorted({f.rule for f in hits if fix_action(f.rule) == "drop"})
+        conv = convs.get(lineno)
+        rule_ids = sorted({f.rule for f in hits})
+        cut = None if drops or conv is None else _cut_point(conv, hits)
+        if cut is None or conv is None or conv.turns_key is None:
+            result.records_dropped += 1
+            result.dropped.update(rule_ids)
+            continue
+        record = copy.deepcopy(dict(conv.raw or {}))
+        first_cut = conv.messages[cut].source_index if cut < len(conv.messages) else None
+        if first_cut is not None:
+            record[conv.turns_key] = record[conv.turns_key][:first_cut]
+        dst.write(json.dumps(record, ensure_ascii=False) + "\n")
+        result.written += 1
+        result.records_trimmed += 1
+        result.trimmed.update(rule_ids)

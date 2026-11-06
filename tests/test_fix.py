@@ -94,3 +94,30 @@ def test_cli_fix(write_jsonl, tmp_path, capsys):
     assert "1 trimmed" in capsys.readouterr().err
     assert main(["check", str(path), "--fix", str(out)]) == 2
     assert main(["check", str(path), "--fix", str(out), "--fix-rules", "nope"]) == 2
+
+
+def test_fix_in_place_keeps_the_data(write_jsonl, tmp_path, capsys):
+    rows = [
+        {"messages": [m("user", "a"), m("assistant", "b")]},
+        {"messages": [m("user", "a"), m("assistant", "b"), m("user", "c")]},
+    ]
+    path = write_jsonl(rows)
+    rc = main(
+        ["check", str(path), "--fail-on", "never", "--fix", str(path), "--fix-rules", "final-role"]
+    )
+    assert rc == 0
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and json.loads(lines[1])["messages"][-1]["content"] == "b"
+    assert "2 records written" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_fix_failure_leaves_no_partial_output(write_jsonl, tmp_path):
+    path = write_jsonl([{"messages": [m("user", "a"), m("assistant", "b")]}])
+    data = load(path)
+    out = tmp_path / "missing-dir" / "fixed.jsonl"
+    try:
+        apply_fixes(path, data, [], ["final-role"], str(out))
+    except OSError:
+        pass
+    assert list(tmp_path.iterdir()) == [path]
