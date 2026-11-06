@@ -60,6 +60,7 @@ def test_find_cards_grouping_and_rejections():
 def test_find_emails_skips_reserved_domains():
     text = "write to ana@mail.example.com or bo@example.org or x@host.test or cy@uni.edu.in"
     assert find_emails(text) == ["cy@uni.edu.in"]
+    assert find_emails("send to your-email@mail.co or recipient@mail.co") == []
 
 
 def test_entropy():

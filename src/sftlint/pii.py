@@ -3,7 +3,8 @@
 * ``pii-email``: an address-shaped string whose domain is not one of the names
   reserved for documentation and testing by RFC 2606 / RFC 6761 (``example.com``,
   ``.test``, ``.invalid``, ``localhost`` ...). Examples in instruction data mostly use
-  those, and they are not personal data.
+  those, and they are not personal data. Placeholder local parts (``your-email@``,
+  ``recipient@``) are skipped for the same reason.
 * ``pii-card``: 13 to 19 digits, optionally grouped by single spaces or hyphens, that
   start with a digit from 2 to 6 (the card-network industry identifiers), pass the
   Luhn checksum, and do not consist of one repeated digit.
@@ -83,8 +84,20 @@ def _reserved(domain: str) -> bool:
     )
 
 
+_PLACEHOLDER_LOCAL = re.compile(
+    r"(?i)your|example|sample|placeholder|recipient|sender|someone|username"
+)
+
+
 def find_emails(text: str) -> list[str]:
-    return [m.group(0) for m in _EMAIL.finditer(text) if not _reserved(m.group(1))]
+    """Addresses outside reserved domains whose local part is not a placeholder
+    word such as ``your-email`` or ``recipient``."""
+    out = []
+    for m in _EMAIL.finditer(text):
+        local = m.group(0).split("@", 1)[0]
+        if not _reserved(m.group(1)) and not _PLACEHOLDER_LOCAL.search(local):
+            out.append(m.group(0))
+    return out
 
 
 def find_cards(text: str) -> list[str]:
