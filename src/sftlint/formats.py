@@ -243,7 +243,13 @@ def parse_tagged_calls(text: str) -> tuple[list[ToolCall], str]:
 
 
 def parse_tagged_results(text: str) -> list[ToolResult]:
-    """Extract ``<tool_response>`` blocks from a tool turn."""
+    """Extract ``<tool_response>`` blocks from a tool turn.
+
+    A block is read as the Hermes envelope ``{"name": ..., "content": ...}`` (plus an
+    optional ``tool_call_id``) only when it has those keys. Any other JSON is the
+    function's own output, so its fields (an ``id`` or ``name`` of a user record, say)
+    say nothing about which call it answers, and the result is matched by position.
+    """
     out = []
     for body in _tag_bodies(text, "tool_response"):
         try:
@@ -251,8 +257,13 @@ def parse_tagged_results(text: str) -> list[ToolResult]:
         except json.JSONDecodeError as exc:
             out.append(ToolResult(parse_error=f"invalid JSON: {exc.msg}"))
             continue
-        if isinstance(obj, Mapping):
-            out.append(ToolResult(obj.get("tool_call_id", obj.get("id")), obj.get("name")))
+        if isinstance(obj, Mapping) and "content" in obj:
+            rid, name = obj.get("tool_call_id"), obj.get("name")
+            out.append(
+                ToolResult(
+                    rid if isinstance(rid, str) else None, name if isinstance(name, str) else None
+                )
+            )
         else:
             out.append(ToolResult())
     return out

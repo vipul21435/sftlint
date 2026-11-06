@@ -92,7 +92,7 @@ Exit codes: 0 when no finding is at or above `--fail-on` (default `error`; `neve
 | `prompt-completion` | `{"prompt", "completion"}` | one user and one assistant turn |
 | `template-text` | `{"text": "<\|im_start\|>user\n...<\|im_end\|>..."}` | text already rendered by a chat template: ChatML, Zephyr (`<\|user\|> ... </s>`) or Llama 3 (`<\|start_header_id\|>role<\|end_header_id\|> ... <\|eot_id\|>`); the first two appear in the Hugging Face chat templating guide, the third in Meta's Llama 3 prompt-format page. A turn with no end-of-turn token is marked unterminated |
 
-Tool calls are read from an OpenAI-style `tool_calls` list (arguments as a JSON string), from the dict form the Hugging Face tool-use guide recommends, from ShareGPT `function_call` turns, and from `<tool_call>{...}</tool_call>` blocks inside assistant text (the Hermes layout, which the same guide shows as model output). `<tool_response>` blocks in a tool turn are read as results with the function name they answer. Declared tools come from a top-level `tools` field (a list or a JSON string) or, failing that, from a `<tools>[...]</tools>` block in the system prompt.
+Tool calls are read from an OpenAI-style `tool_calls` list (arguments as a JSON string), from the dict form the Hugging Face tool-use guide recommends, from ShareGPT `function_call` turns, and from `<tool_call>{...}</tool_call>` blocks inside assistant text (the Hermes layout, which the same guide shows as model output). `<tool_response>` blocks in a tool turn are read as results: a `{"name", "content"}` envelope (the Hermes layout) gives the function name it answers, and any other JSON is taken as the function's own output and matched by position, so an `id` or `name` field of an API result is not mistaken for a call id. Declared tools come from a top-level `tools` field (a list or a JSON string) or, failing that, from a `<tools>[...]</tools>` block in the system prompt.
 
 **Rules.** Severities are defaults; `--fail-on` decides which ones fail a CI job.
 
@@ -119,7 +119,7 @@ Tool calls are read from an OpenAI-style `tool_calls` list (arguments as a JSON 
 | `tool-args-json` | error | a tool call that cannot be read, or whose arguments are not a JSON object | the OpenAI function-calling guide defines arguments as JSON-encoded; a call that does not parse trains the model to emit calls a client cannot run |
 | `tool-unknown` | error | a call to a function the record does not declare | the model learns to call tools it was never shown |
 | `tool-args-schema` | error | arguments that fail the declared `parameters` JSON Schema (first three errors shown, with paths such as `$.unit`) | both the OpenAI and Hugging Face formats declare parameters as JSON Schema; arguments outside it teach wrong calls |
-| `tool-result-match` | error | a tool result that answers no pending call, or a call that gets no result while the conversation goes on | results are matched to calls by id (the Hugging Face guide notes ids disambiguate several results), else by function name, else by position |
+| `tool-result-match` | error | a tool result that answers no pending call, or a call that gets no result while the conversation goes on | results are matched to calls by id when the calls carry ids (the Hugging Face guide notes ids disambiguate several results), else by function name, else by position |
 
 PII, secret and tool rules also read tool-call arguments, not only the text of each turn.
 

@@ -164,3 +164,30 @@ def test_unnamed_result_matches_by_position():
     }
     msgs = [f.message for f in check_tool_result_match(normalize(rec))]
     assert msgs == ["result 'result' answers no pending call"]
+
+
+TAGGED_GET_USER = '<tool_call>{"name": "get_user", "arguments": {"user_id": 42}}</tool_call>'
+
+
+def test_tool_response_id_field_is_payload_not_call_id():
+    rec = {
+        "conversations": [
+            {"from": "human", "value": "Show user 42."},
+            {"from": "gpt", "value": TAGGED_GET_USER},
+            {"from": "tool", "value": '<tool_response>{"id": 42, "name": "Ada"}</tool_response>'},
+            {"from": "gpt", "value": "User 42 is Ada."},
+        ]
+    }
+    assert check_tool_result_match(normalize(rec)) == []
+
+
+def test_id_less_tagged_call_answered_by_tool_call_id():
+    rec = {
+        "messages": [
+            {"role": "user", "content": "q"},
+            {"role": "assistant", "content": '<tool_call>{"name": "f"}</tool_call>'},
+            {"role": "tool", "tool_call_id": "call_1", "content": "ok"},
+            {"role": "assistant", "content": "done"},
+        ]
+    }
+    assert check_tool_result_match(normalize(rec)) == []

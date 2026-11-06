@@ -8,7 +8,8 @@
 * ``tool-args-schema``: arguments that fail the declared ``parameters`` JSON Schema
   (see :mod:`sftlint.schema` for the supported keywords).
 * ``tool-result-match``: a tool result that answers no pending call (by
-  ``tool_call_id``, else by function name, else by position), or a call that gets no
+  ``tool_call_id`` when the calls carry ids, else by function name, else by
+  position), or a call that gets no
   result although the conversation goes on. A conversation that ends on the call
   turn is accepted: in single-turn function-calling data the call is the target.
 """
@@ -122,7 +123,8 @@ def check_tool_args_schema(conv: Conversation, max_errors: int = 3) -> list[Find
 
 
 def _match(pending: list[ToolCall], rid: str | None, name: str | None) -> ToolCall | None:
-    if rid is not None:
+    """By id when the pending calls carry ids, else by function name, else the first."""
+    if rid is not None and any(c.id is not None for c in pending):
         return next((c for c in pending if c.id == rid), None)
     if name is not None:
         return next((c for c in pending if c.name == name), None)
