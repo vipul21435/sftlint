@@ -43,8 +43,17 @@ class Report:
         return max((f.severity for f in self.findings), key=severity_rank)
 
 
-def selected_rules(select: Iterable[str] | None, ignore: Iterable[str] | None) -> set[str]:
-    """Resolve ``--select`` / ``--ignore`` to a set of rule ids. Unknown ids raise."""
+def selected_rules(
+    select: str | Iterable[str] | None, ignore: str | Iterable[str] | None
+) -> set[str]:
+    """Resolve ``--select`` / ``--ignore`` to a set of rule ids. Unknown ids raise.
+
+    Each may be a list of ids or one string of comma-separated ids.
+    """
+    if isinstance(select, str):
+        select = [v.strip() for v in select.split(",") if v.strip()]
+    if isinstance(ignore, str):
+        ignore = [v.strip() for v in ignore.split(",") if v.strip()]
     chosen = set(select) if select else set(RULES)
     dropped = set(ignore or ())
     unknown = (chosen | dropped) - set(RULES)
@@ -56,8 +65,8 @@ def selected_rules(select: Iterable[str] | None, ignore: Iterable[str] | None) -
 def lint(
     data: Dataset,
     path: str = "",
-    select: Iterable[str] | None = None,
-    ignore: Iterable[str] | None = None,
+    select: str | Iterable[str] | None = None,
+    ignore: str | Iterable[str] | None = None,
     outlier_z: float = 3.5,
     count_tokens: TokenCounter = pretokens,
     tokenizer: str = "pretokens",

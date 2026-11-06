@@ -9,7 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from sftlint.findings import Finding
-from sftlint.formats import Conversation, FormatError, detect_file_format, normalize
+from sftlint.formats import (
+    FORMATS,
+    Conversation,
+    FormatError,
+    detect_file_format,
+    normalize,
+)
 
 
 @dataclass
@@ -43,6 +49,8 @@ def load(path: str | Path, fmt: str = "auto") -> Dataset:
     With ``fmt="auto"`` the file format is a majority vote over the first records and
     each record that does not match it is reported under ``format-mismatch``.
     """
+    if fmt != "auto" and fmt not in FORMATS:
+        raise ValueError(f"unknown format {fmt!r}; expected auto or one of: {', '.join(FORMATS)}")
     rows = list(iter_jsonl(path))
     findings: list[Finding] = []
     file_fmt = (

@@ -140,6 +140,7 @@ def find_emails(text: str) -> list[str]:
 
 
 def find_cards(text: str) -> list[str]:
+    """Digit runs in ``text`` that pass the card checks (first digit, length, Luhn)."""
     out = []
     for m in _CARD.finditer(text):
         raw = m.group(0)

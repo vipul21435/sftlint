@@ -44,3 +44,18 @@ def test_utf8_byte_order_mark_is_accepted(tmp_path):
     args = ["check", str(path), "--fix", str(out), "--fix-rules", "empty-turn"]
     assert main(args) == 0
     assert out.read_bytes().startswith(b'{"messages"')
+
+
+def test_load_rejects_unknown_format(write_jsonl):
+    import pytest
+
+    with pytest.raises(ValueError, match="unknown format"):
+        load(write_jsonl([{"prompt": "a", "completion": "b"}]), fmt="messges")
+
+
+def test_lint_accepts_a_single_rule_id_string(write_jsonl):
+    from sftlint.lint import lint
+
+    rows = [{"messages": [{"role": "assistant", "content": "a"}, {"role": "user", "content": "b"}]}]
+    report = lint(load(write_jsonl(rows)), select="role-order", ignore="final-role")
+    assert set(report.counts()) == {"role-order"}

@@ -11,6 +11,7 @@ from sftlint.rules import RULES
 
 
 def to_dict(report: Report, max_examples: int | None = None) -> dict[str, Any]:
+    """The report as plain data; ``max_examples`` caps the findings listed (counts are full)."""
     findings = report.findings if max_examples is None else report.findings[:max_examples]
     return {
         "tool": "sftlint",
@@ -28,6 +29,7 @@ def to_dict(report: Report, max_examples: int | None = None) -> dict[str, Any]:
 
 
 def to_json(report: Report, max_examples: int | None = None) -> str:
+    """:func:`to_dict` as indented JSON text ending in a newline."""
     return json.dumps(to_dict(report, max_examples), indent=2, ensure_ascii=False) + "\n"
 
 
@@ -36,6 +38,8 @@ def _fmt_num(x: float) -> str:
 
 
 def to_markdown(report: Report, max_examples: int = 20) -> str:
+    """A Markdown report: counts per rule, length statistics, content statistics and the
+    first ``max_examples`` findings with line and turn."""
     sev = report.severity_counts()
     lines = [
         f"# sftlint report: {report.path or 'input'}",
