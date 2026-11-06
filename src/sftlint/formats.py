@@ -11,6 +11,10 @@ Supported layouts:
   and ``observation`` turns become tool results.
 * ``alpaca``: ``instruction``, optional ``input`` and ``output`` strings.
 * ``prompt-completion``: ``prompt`` and ``completion`` strings.
+* ``template-text``: a ``text`` string already rendered by a chat template, in one of
+  three public layouts: ChatML (``<|im_start|>role ... <|im_end|>``), Zephyr
+  (``<|user|> ... </s>``) or Llama 3 (``<|start_header_id|>role<|end_header_id|> ...
+  <|eot_id|>``). A turn with no end-of-turn token is marked ``unterminated``.
 
 Tool calls are normalised to :class:`ToolCall` whatever their source: an OpenAI
 ``tool_calls`` list (or the older ``function_call`` field), a ShareGPT
@@ -28,7 +32,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-FORMATS = ("messages", "sharegpt", "alpaca", "prompt-completion")
+FORMATS = ("messages", "sharegpt", "alpaca", "prompt-completion", "template-text")
 
 ROLES = ("system", "user", "assistant", "tool")
 
@@ -103,6 +107,7 @@ class Message:
     content_missing: bool = False
     tool_results: list[ToolResult] = field(default_factory=list)
     source_index: int | None = None  # position in the record's turn list, when it has one
+    unterminated: bool = False  # rendered text only: no end-of-turn token after this turn
 
     def results(self) -> list[ToolResult]:
         """The results a tool turn carries: tagged blocks, else one from its id and name."""
@@ -147,6 +152,9 @@ def detect_format(record: Any) -> str | None:
         return "alpaca"
     if isinstance(record.get("prompt"), str) and isinstance(record.get("completion"), str):
         return "prompt-completion"
+    text = record.get("text")
+    if isinstance(text, str) and _template_layout(text) is not None:
+        return "template-text"
     return None
 
 
@@ -323,11 +331,52 @@ def _prompt_completion(record: Mapping[str, Any]) -> list[Message]:
     ]
 
 
+_ZEPHYR_ROLES = r"(?:system|user|assistant)"
+_TEMPLATES = {
+    "chatml": re.compile(
+        r"<\|im_start\|>(\w+)\n?(.*?)(<\|im_end\|>|(?=<\|im_start\|>)|$)", re.DOTALL
+    ),
+    "llama3": re.compile(
+        r"<\|start_header_id\|>(\w+)<\|end_header_id\|>\n*(.*?)"
+        r"(<\|eot_id\|>|(?=<\|start_header_id\|>)|$)",
+        re.DOTALL,
+    ),
+    "zephyr": re.compile(
+        rf"<\|({_ZEPHYR_ROLES})\|>\n?(.*?)(</s>|(?=<\|{_ZEPHYR_ROLES}\|>)|$)", re.DOTALL
+    ),
+}
+_TEMPLATE_MARKERS = {
+    "chatml": "<|im_start|>",
+    "llama3": "<|start_header_id|>",
+    "zephyr": "<|user|>",
+}
+
+
+def _template_layout(text: str) -> str | None:
+    for name, marker in _TEMPLATE_MARKERS.items():
+        if marker in text:
+            return name
+    return None
+
+
+def _template_text(record: Mapping[str, Any]) -> list[Message]:
+    text = record["text"]
+    layout = _template_layout(text) or "chatml"
+    out = []
+    for m in _TEMPLATES[layout].finditer(text):
+        raw_role, body, end = m.group(1), m.group(2), m.group(3)
+        role = _MESSAGES_ROLE_MAP.get(raw_role.lower(), raw_role)
+        msg = Message(role, body.rstrip("\n"), raw_role=raw_role, unterminated=not end)
+        out.append(_apply_tags(msg))
+    return out
+
+
 _NORMALISERS = {
     "messages": _messages,
     "sharegpt": _sharegpt,
     "alpaca": _alpaca,
     "prompt-completion": _prompt_completion,
+    "template-text": _template_text,
 }
 
 

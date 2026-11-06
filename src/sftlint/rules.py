@@ -176,7 +176,10 @@ def truncation_reason(text: str) -> str | None:
 def check_truncated_final(conv: Conversation) -> list[Finding]:
     if not conv.messages or conv.messages[-1].role != "assistant":
         return []
-    reason = truncation_reason(conv.messages[-1].content)
+    last = conv.messages[-1]
+    reason = truncation_reason(last.content)
+    if reason is None and last.unterminated and last.content.strip():
+        reason = "no end-of-turn token after the final turn"
     if reason is None:
         return []
     return [_f("truncated-final", conv, reason, len(conv.messages) - 1)]

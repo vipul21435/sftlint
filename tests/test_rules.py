@@ -120,3 +120,13 @@ def test_truncated_final_only_checks_last_assistant():
     assert run("truncated-final", conv(("user", "list:"))) == []
     out = run("truncated-final", conv(("user", "q"), ("assistant", "Steps are:")))
     assert out[0].turn == 1
+
+
+def test_truncated_final_reports_missing_end_token():
+    c = normalize({"text": "<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello there."})
+    out = CHECKS["truncated-final"](c)
+    assert [f.message for f in out] == ["no end-of-turn token after the final turn"]
+    ok = normalize(
+        {"text": "<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello.<|im_end|>"}
+    )
+    assert CHECKS["truncated-final"](ok) == []

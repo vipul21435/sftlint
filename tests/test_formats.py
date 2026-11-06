@@ -158,3 +158,34 @@ def test_openai_tool_message_result_from_id():
     assert conv.tools is None
     res = conv.messages[1].results()
     assert (res[0].id, res[0].name) == ("c9", "g")
+
+
+def test_template_text_chatml_and_generation_prompt():
+    text = (
+        "<|im_start|>system\nBe brief.<|im_end|>\n<|im_start|>user\nHi there!<|im_end|>\n"
+        "<|im_start|>assistant\nNice to meet you!<|im_end|>\n<|im_start|>assistant\n"
+    )
+    rec = {"text": text}
+    assert detect_format(rec) == "template-text"
+    conv = normalize(rec)
+    assert [m.role for m in conv.messages] == ["system", "user", "assistant", "assistant"]
+    assert conv.messages[1].content == "Hi there!"
+    assert not conv.messages[2].unterminated
+    assert conv.messages[3].content == "" and conv.messages[3].unterminated
+    assert conv.turns_key is None
+
+
+def test_template_text_zephyr_and_llama3():
+    z = normalize({"text": "<|user|>\nWhich is bigger?</s>\n<|assistant|>\nThe sun.</s>\n"})
+    assert [(m.role, m.content) for m in z.messages] == [
+        ("user", "Which is bigger?"),
+        ("assistant", "The sun."),
+    ]
+    llama = (
+        "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nHi<|eot_id|>"
+        "<|start_header_id|>assistant<|end_header_id|>\n\nHello, how can I"
+    )
+    conv = normalize({"text": llama})
+    assert [m.content for m in conv.messages] == ["Hi", "Hello, how can I"]
+    assert conv.messages[-1].unterminated
+    assert detect_format({"text": "plain prose"}) is None
