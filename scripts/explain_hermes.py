@@ -109,6 +109,17 @@ def main() -> None:
     for kind, n in kinds.most_common():
         print(f"  {kind}: {n}")
 
+    blocks = Counter(
+        "unreadable" if r.parse_error else "envelope" if r.name is not None else "payload"
+        for conv in ds.conversations
+        for m in conv.messages
+        for r in m.tool_results
+    )
+    print(
+        f"tool_response blocks read as an envelope: {blocks['envelope']}, as payload: "
+        f"{blocks['payload']}, unreadable: {blocks['unreadable']}"
+    )
+
 
 if __name__ == "__main__":
     main()
