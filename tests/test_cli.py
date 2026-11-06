@@ -100,9 +100,21 @@ def test_cli_rejects_out_of_range_values(write_jsonl, flags, capsys):
     assert "error:" in capsys.readouterr().err
 
 
-def test_cli_report_write_error_exits_2(write_jsonl, tmp_path):
+def test_cli_report_write_error_exits_2(write_jsonl, tmp_path, capsys):
     path = str(write_jsonl(ROWS))
-    assert main(["check", path, "--json", str(tmp_path / "no" / "dir" / "r.json")]) == 2
+    capsys.readouterr()
+    for flag in ("--json", "--markdown"):
+        assert main(["check", path, flag, str(tmp_path / "no" / "dir" / "r.out")]) == 2
+        err = capsys.readouterr().err
+        assert err.startswith("sftlint: [Errno 2]") and "internal error" not in err
+
+
+def test_cli_missing_input_is_an_io_error_not_an_internal_one(tmp_path, capsys):
+    missing = str(tmp_path / "missing.jsonl")
+    for command in ("check", "detect"):
+        assert main([command, missing]) == 2
+        err = capsys.readouterr().err
+        assert err.startswith("sftlint: [Errno 2]") and "internal error" not in err
 
 
 def test_non_string_tool_name_is_a_finding_not_a_crash(write_jsonl, capsys):
