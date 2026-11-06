@@ -116,3 +116,24 @@ def test_null_fails_a_typed_schema_unless_nullable():
     assert validate(None, {"type": "string", "nullable": True}) == []
     assert validate(5, {"type": "string", "nullable": True}) == ["$: expected string, got integer"]
     assert validate(None, {"type": "string", "nullable": False}) != []
+
+
+def test_bounds_are_inclusive():
+    cases = [
+        ({"type": "array", "minItems": 2}, [1, 2], [1]),
+        ({"type": "array", "maxItems": 2}, [1, 2], [1, 2, 3]),
+        ({"type": "string", "minLength": 2}, "ab", "a"),
+        ({"type": "string", "maxLength": 2}, "ab", "abc"),
+        ({"type": "number", "minimum": 2}, 2, 1.5),
+        ({"type": "number", "maximum": 2}, 2, 2.5),
+    ]
+    for schema, at_bound, past_bound in cases:
+        assert validate(at_bound, schema) == [], schema
+        assert len(validate(past_bound, schema)) == 1, schema
+
+
+def test_enum_of_arrays_against_a_scalar():
+    assert validate(1, {"enum": [[1, 2]]}) == ["$: 1 is not one of [[1, 2]]"]
+    assert validate([1, 2], {"enum": [[1, 2]]}) == []
+    assert validate("ab", {"enum": [["a", "b"]]}) == ["$: 'ab' is not one of [['a', 'b']]"]
+    assert validate(["a", "b"], {"enum": ["ab"]}) != []
