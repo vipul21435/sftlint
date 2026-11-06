@@ -102,3 +102,26 @@ def test_content_stats():
     assert st["answered"] == 2 and st["refusals"] == 1 and st["refusal_rate"] == 0.5
     assert st["answer_scripts"] == {"Latin": 2}
     assert content_stats([])["refusal_rate"] == 0.0
+
+
+def test_refusal_rate_gate(write_jsonl):
+    from sftlint.cli import main
+    from sftlint.content import check_refusal_rate
+    from sftlint.lint import lint
+    from sftlint.loader import load
+    from sftlint.report import to_markdown
+
+    rows = [
+        {"prompt": "q1", "completion": "I'm sorry, but I can't help with that."},
+        {"prompt": "q2", "completion": "Sure, here it is."},
+    ]
+    path = write_jsonl(rows)
+    report = lint(load(path), max_refusal_rate=0.25)
+    gate = [f for f in report.findings if f.rule == "refusal-rate"]
+    assert len(gate) == 1 and gate[0].line == 0
+    assert "1 of 2 answers refuse (50.00 %), above 25.00 %" in gate[0].message
+    assert "- dataset: `refusal-rate`" in to_markdown(report)
+    assert lint(load(path), max_refusal_rate=0.5).counts().get("refusal-rate") is None
+    assert check_refusal_rate({"refusal_rate": 0.9}, None) == []
+    assert main(["check", str(path), "--max-refusal-rate", "0.25", "--fail-on", "error"]) == 1
+    assert main(["check", str(path), "--max-refusal-rate", "0.5", "--fail-on", "error"]) == 0

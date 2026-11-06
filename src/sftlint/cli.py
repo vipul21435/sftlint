@@ -45,6 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--outlier-z", type=float, default=3.5, help="modified z threshold (default 3.5)"
     )
     check.add_argument(
+        "--max-refusal-rate",
+        type=float,
+        metavar="RATE",
+        help="add a refusal-rate error when this share of answers refuse (0 to 1; off by default)",
+    )
+    check.add_argument(
         "--tokenizer",
         default="pretokens",
         help="token counter for length stats: pretokens (default) or tiktoken:<encoding>",
@@ -83,7 +89,14 @@ def _cmd_check(args: argparse.Namespace) -> int:
         counter = get_counter(args.tokenizer)
         data = load(args.path, args.format)
         report = lint(
-            data, args.path, args.select, args.ignore, args.outlier_z, counter, args.tokenizer
+            data,
+            args.path,
+            args.select,
+            args.ignore,
+            args.outlier_z,
+            counter,
+            args.tokenizer,
+            args.max_refusal_rate,
         )
         if args.fix:
             unknown = set(args.fix_rules) - set(RULES)

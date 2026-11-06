@@ -75,6 +75,7 @@ sftlint check data.jsonl --select role-order,empty-turn
 sftlint check data.jsonl --ignore length-outlier --fail-on warning
 sftlint check data.jsonl --format sharegpt --outlier-z 4 --max-examples 50
 sftlint check data.jsonl --tokenizer tiktoken:cl100k_base   # needs the tiktoken extra
+sftlint check data.jsonl --max-refusal-rate 0.02            # fail when over 2 % of answers refuse
 ```
 
 Exit codes: 0 when no finding is at or above `--fail-on` (default `error`; `never` always exits 0), 1 when one is, 2 on a usage or I/O error. From Python, see `examples/lint_sample.py`.
@@ -107,6 +108,7 @@ Tool calls are read from an OpenAI-style `tool_calls` list (arguments as a JSON 
 | `final-role` | warning | a last turn that is not assistant | the record has no target to learn from; the OpenAI data-prep notebook checks that every conversation has an assistant message |
 | `truncated-final` | warning | a final assistant turn with an unclosed triple-backtick fence, a last character that cannot end a sentence (`, ; : ( [ {` and operators), a last word that is an article, conjunction or preposition, or (rendered text) no end-of-turn token | the usual trace of a generation that hit its token limit |
 | `refusal` | info | a final answer whose first 300 characters contain a refusal phrase at a sentence start | a refusal rate far from what the set intends skews a model towards over- or under-refusing; the report gives the rate |
+| `refusal-rate` | error | the share of answers that open with a refusal phrase, when it is above `--max-refusal-rate` (off unless the flag is given) | a CI gate for the rate itself; one dataset-level finding, reported at line 0 |
 | `language-mix` | info | a final answer whose dominant script differs from the last user turn's | a question answered in another language is usually a generation or translation fault |
 | `duplicate-prompt` | warning | a record whose prompt (every turn before the final assistant turn, with roles, whitespace collapsed, case kept) equals an earlier record's | exact duplicates over-weight one prompt; near-duplicates are out of scope (see datasieve) |
 | `length-outlier` | info | a prompt or response length that is a robust outlier for the file | catches empty-ish and runaway records without a fixed limit |

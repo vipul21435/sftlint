@@ -24,7 +24,7 @@ from typing import Any
 
 from sftlint.findings import Finding
 from sftlint.formats import Conversation
-from sftlint.rules import RULES, rule
+from sftlint.rules import RULES, RuleInfo, rule
 
 REFUSAL_WINDOW = 300
 MIN_LETTERS = 20
@@ -147,3 +147,19 @@ def content_stats(convs: Sequence[Conversation]) -> dict[str, Any]:
         "refusal_rate": refusals / answered if answered else 0.0,
         "answer_scripts": dict(scripts.most_common()),
     }
+
+
+RULES["refusal-rate"] = RuleInfo(
+    "refusal-rate", "error", "the share of answers that refuse is above --max-refusal-rate"
+)
+
+
+def check_refusal_rate(stats: dict[str, Any], max_rate: float | None) -> list[Finding]:
+    """One dataset-level finding (line 0) when the refusal rate exceeds ``max_rate``."""
+    if max_rate is None or stats["refusal_rate"] <= max_rate:
+        return []
+    msg = (
+        f"{stats['refusals']} of {stats['answered']} answers refuse "
+        f"({100 * stats['refusal_rate']:.2f} %), above {100 * max_rate:.2f} %"
+    )
+    return [Finding("refusal-rate", RULES["refusal-rate"].severity, 0, msg)]

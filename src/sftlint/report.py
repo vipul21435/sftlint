@@ -87,5 +87,6 @@ def to_markdown(report: Report, max_examples: int = 20) -> str:
         lines += ["", f"## First {min(max_examples, len(report.findings))} findings", ""]
         for f in report.findings[:max_examples]:
             turn = "" if f.turn is None else f" turn {f.turn}"
-            lines.append(f"- line {f.line}{turn}: `{f.rule}` {f.message}")
+            where = f"line {f.line}" if f.line else "dataset"
+            lines.append(f"- {where}{turn}: `{f.rule}` {f.message}")
     return "\n".join(lines) + "\n"
