@@ -29,3 +29,10 @@ def test_sample_counts():
 def test_example_script_runs(capsys):
     runpy.run_path(str(EXAMPLES / "lint_sample.py"), run_name="__main__")
     assert "# sftlint report: sample.jsonl" in capsys.readouterr().out
+
+
+def test_fix_example_runs(capsys):
+    runpy.run_path(str(EXAMPLES / "fix_sample.py"), run_name="__main__")
+    out = capsys.readouterr().out
+    assert "11 records written, 2 dropped, 1 trimmed" in out
+    assert "after the fix: 0 findings of those rules" in out
