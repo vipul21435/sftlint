@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sftlint"
+version = "0.1.0"
+description = "Lint chat, SFT and tool-calling datasets in JSONL"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Vipul Raj Jha" }]
+keywords = ["sft", "chat", "dataset", "lint", "jsonl", "fine-tuning"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
+
+[project.scripts]
+sftlint = "sftlint.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/vipul21435/sftlint"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sftlint"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.coverage.run]
+source = ["sftlint"]
