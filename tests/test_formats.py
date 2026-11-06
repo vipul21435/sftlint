@@ -68,7 +68,12 @@ def test_normalize_sharegpt_function_call_and_system():
     }
     conv = normalize(rec)
     assert [m.role for m in conv.messages] == [
-        "system", "user", "assistant", "tool", "assistant", "narrator",
+        "system",
+        "user",
+        "assistant",
+        "tool",
+        "assistant",
+        "narrator",
     ]
     assert conv.messages[2].tool_calls[0]["function"]["name"] == "w"
     assert conv.messages[2].content == ""
