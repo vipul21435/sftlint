@@ -156,3 +156,15 @@ def test_cli_rejects_bad_outlier_z(write_jsonl, value, capsys):
     with pytest.raises(SystemExit) as exc:
         main(["check", str(write_jsonl(ROWS)), "--outlier-z", value])
     assert exc.value.code == 2
+
+
+def test_check_fails_on_an_empty_file(write_jsonl, capsys):
+    path = str(write_jsonl(["", "  "]))
+    assert main(["check", path]) == 1
+    assert "0 records read, fewer than --min-records 1" in capsys.readouterr().err
+    assert main(["check", path, "--min-records", "0"]) == 0
+    assert main(["check", path, "--fail-on", "never"]) == 0
+    assert main(["detect", path]) == 1
+    two = str(write_jsonl(ROWS[:2], name="two.jsonl"))
+    assert main(["check", two, "--min-records", "3"]) == 1
+    assert main(["check", two, "--min-records", "2"]) == 0

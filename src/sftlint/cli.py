@@ -64,6 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 1 when a finding of this severity or worse exists (default: error)",
     )
     check.add_argument(
+        "--min-records",
+        type=_non_negative,
+        default=1,
+        metavar="N",
+        help="exit 1 when fewer than N records were read, unless --fail-on never (default 1)",
+    )
+    check.add_argument(
         "--outlier-z", type=_positive, default=3.5, help="modified z threshold (default 3.5)"
     )
     check.add_argument(
@@ -150,8 +157,16 @@ def _cmd_check(args: argparse.Namespace) -> int:
             print(f"  {rule:<18} {RULES[rule].severity:<8} {n}")
     if args.fix:
         print(f"fix: {fixed.summary()} -> {args.fix}", file=sys.stderr)
+    if args.fail_on == "never":
+        return 0
+    if report.records < args.min_records:
+        print(
+            f"sftlint: {report.records} records read, fewer than --min-records {args.min_records}",
+            file=sys.stderr,
+        )
+        return 1
     worst = report.worst()
-    if args.fail_on == "never" or worst is None:
+    if worst is None:
         return 0
     return 1 if severity_rank(worst) >= severity_rank(args.fail_on) else 0
 

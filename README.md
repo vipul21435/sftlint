@@ -87,7 +87,7 @@ sftlint check data.jsonl --tokenizer tiktoken:cl100k_base   # needs the tiktoken
 sftlint check data.jsonl --max-refusal-rate 0.02            # fail when over 2 % of answers refuse
 ```
 
-Exit codes: 0 when no finding is at or above `--fail-on` (default `error`; `never` always exits 0), 1 when one is, 2 on a usage or I/O error (or, as a one-line message, an internal error). From Python, see `examples/lint_sample.py` (lint and print the Markdown report) and `examples/fix_sample.py` (lint, fix three rules, lint the copy again).
+Exit codes: 0 when no finding is at or above `--fail-on` (default `error`; `never` always exits 0), 1 when one is or when fewer than `--min-records` records were read (default 1, so an empty file fails; `--min-records 0` turns this off), 2 on a usage or I/O error (or, as a one-line message, an internal error). From Python, see `examples/lint_sample.py` (lint and print the Markdown report) and `examples/fix_sample.py` (lint, fix three rules, lint the copy again).
 
 ## How it works
 
