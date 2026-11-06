@@ -123,3 +123,23 @@ def test_repeated_value_reported_once_per_conversation():
     found = check_pii_email(conv)
     assert [f.turn for f in found] == [0, 1]
     assert found[1].message.startswith("email address bo")
+
+
+def test_tool_call_arguments_are_scanned():
+    from sftlint.formats import normalize
+    from sftlint.pii import check_pii_email
+
+    c = normalize(
+        {
+            "conversations": [
+                {"from": "human", "value": "Email Ana."},
+                {
+                    "from": "gpt",
+                    "value": '<tool_call>{"name": "send", '
+                    '"arguments": {"to": "ana@corp.io"}}</tool_call>',
+                },
+            ]
+        }
+    )
+    out = check_pii_email(c)
+    assert len(out) == 1 and out[0].turn == 1

@@ -16,6 +16,7 @@
   of at least 3.5 bits per character.
 
 Each distinct match is reported once per conversation, at the first turn it appears.
+Tool-call arguments are scanned along with the text of each turn.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from collections.abc import Callable
 from sftlint.findings import Finding
 from sftlint.formats import Conversation
 from sftlint.rules import rule
+from sftlint.stats import turn_text
 
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")
 _RESERVED_DOMAINS = ("example.com", "example.org", "example.net", "example.edu")
@@ -142,7 +144,7 @@ def _first_seen(conv: Conversation, finder: Callable[[str], list[str]]) -> list[
     seen: set[str] = set()
     out = []
     for i, m in enumerate(conv.messages):
-        for value in finder(m.content):
+        for value in finder(turn_text(m)):
             if value not in seen:
                 seen.add(value)
                 out.append((i, value))
