@@ -3,9 +3,10 @@
 * ``refusal``: the final assistant turn opens with a refusal phrase within its first
   ``REFUSAL_WINDOW`` characters. The phrase list follows the prefix list Zou et al.
   (2023) match to decide whether a model refused, narrowed so that ordinary openings
-  ("As an example", "Sorry to hear that") do not count. Refusals are not errors in
-  themselves, so the rule is ``info`` and the report gives the rate over the file:
-  a refusal rate far from what the dataset intends is the signal.
+  ("As an example", "Sorry to hear that", "I can't help but wonder") do not count.
+  Refusals are not errors in themselves, so the rule is ``info`` and the report gives
+  the rate over the file: a refusal rate far from what the dataset intends is the
+  signal.
 * ``language-mix``: the dominant script of the final answer differs from that of the
   last user turn, for example a question in Cyrillic answered in Latin script.
   Scripts approximate the Unicode Script property (UAX #24) from character names,
@@ -31,16 +32,17 @@ MIN_LETTERS = 20
 MIN_SHARE = 0.6
 
 _REFUSAL = re.compile(
-    r"(?i)(?:^|(?<=[.!?\n]\s)|(?<=^\W))(?:"
+    r"(?i)(?:^|(?<=[.!?\n]\s)|(?<=\n)|(?<=^\W))(?:"
     r"i(?:'|’)?m sorry,? but|i am sorry,? but|sorry,? but i (?:can(?:'|’)?t|cannot|won(?:'|’)?t)|"
     r"i apologi[sz]e,? but|"
     r"i (?:cannot|can(?:'|’)?t|can not|won(?:'|’)?t|will not|am unable to|(?:'|’)m unable to|"
-    r"am not able to|(?:'|’)m not able to) (?:help|assist|provide|fulfil|comply|"
+    r"am not able to|(?:'|’)m not able to) (?:help(?! but)|assist|provide|fulfil|comply|"
     r"create|generate|write|support|engage|do that|answer)|"
     r"as an ai(?: language model| assistant| model)?,|"
     r"i(?:'|’)?m (?:just )?an ai\b|i am (?:just )?an ai\b|"
-    r"as a responsible ai|it(?:'|’)?s not appropriate|it is not appropriate|"
-    r"i would advise against"
+    r"as a responsible ai|"
+    r"(?:it(?:'|’)?s|it is) not appropriate (?:for me|to (?:help|assist|"
+    r"provide|share|give|disclose|reveal|create|generate|write|make)\b)"
     r")"
 )
 
@@ -55,7 +57,8 @@ def refusal_phrase(text: str, window: int = REFUSAL_WINDOW) -> str | None:
 def char_script(ch: str) -> str | None:
     """Approximate Unicode script of a letter, or ``None`` for non-letters.
 
-    Han ideographs are ``Han``; hiragana and katakana are ``Kana``; otherwise the
+    Han ideographs are ``Han``; hiragana and katakana (full or half width) are
+    ``Kana``; modifier, superscript and subscript letters are ``None``; otherwise the
     first word of the character name (``LATIN``, ``CYRILLIC``, ``ARABIC`` ...).
     """
     if ch.isascii():
@@ -67,12 +70,14 @@ def char_script(ch: str) -> str | None:
         return None
     if name.startswith("CJK"):
         return "Han"
-    word = name.split()[0]
-    if word in ("HIRAGANA", "KATAKANA"):
+    words = name.split()
+    if words[0] in ("FULLWIDTH", "HALFWIDTH") and len(words) > 1:
+        words = words[1:]
+    if words[0] in ("HIRAGANA", "KATAKANA"):
         return "Kana"
-    if word in ("FULLWIDTH", "HALFWIDTH"):
-        word = name.split()[1]
-    return word.capitalize()
+    if words[0] in ("MODIFIER", "SUPERSCRIPT", "SUBSCRIPT"):
+        return None  # mostly Latin or Common in UAX #24; not counted either way
+    return words[0].capitalize()
 
 
 _CODE = re.compile(r"```.*?(?:```|$)|`[^`\n]*`", re.DOTALL)

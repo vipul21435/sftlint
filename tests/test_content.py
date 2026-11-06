@@ -125,3 +125,27 @@ def test_refusal_rate_gate(write_jsonl):
     assert check_refusal_rate({"refusal_rate": 0.9}, None) == []
     assert main(["check", str(path), "--max-refusal-rate", "0.25", "--fail-on", "error"]) == 1
     assert main(["check", str(path), "--max-refusal-rate", "0.5", "--fail-on", "error"]) == 0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can't help but wonder whether the proof holds.",
+        "It's not appropriate to use a semicolon there; use a comma.",
+        "I would advise against using global variables here.",
+    ],
+)
+def test_ordinary_openings_are_not_refusals(text):
+    assert refusal_phrase(text) is None
+
+
+def test_refusal_after_a_heading_line():
+    assert refusal_phrase("Title\nI cannot help with that.") == "I cannot help"
+    assert refusal_phrase("It's not appropriate for me to share that.")
+
+
+def test_char_script_halfwidth_kana_and_modifier_letters():
+    assert char_script("ｱ") == "Kana"  # HALFWIDTH KATAKANA LETTER A
+    assert dominant_script("ｱｲｳ漢字" * 5) == "Japanese"
+    assert char_script("ʰ") is None  # MODIFIER LETTER SMALL H
+    assert char_script("ᵃ") is None  # MODIFIER LETTER SMALL A
