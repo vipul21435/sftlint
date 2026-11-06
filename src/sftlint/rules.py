@@ -151,6 +151,7 @@ _DANGLING_WORDS = frozenset(
     "a an the and or but of to in on for with by from as at is are was were that which "
     "because if then than".split()
 )
+_FENCE_LINE = re.compile(r"^ {0,3}(`{3,})(.*)$")
 _LAST_WORD = re.compile(r"(?:^|\s)([A-Za-z]+)\s*$")
 _URL_END = re.compile(r"(?:^|\s)<?https?://\S*[^\s,;:(\[{]$")
 
@@ -168,11 +169,36 @@ def _closed_ending(stripped: str) -> bool:
     return stripped.endswith(("++", "--", ":)", ":-)", "||"))
 
 
+def unclosed_fence(text: str) -> bool:
+    """Whether a backtick code fence is still open at the end of ``text``.
+
+    Fences are paired by line, as CommonMark pairs them: a line that starts (after at
+    most three spaces) with three or more backticks opens a block, and only a line of
+    at least as many backticks with nothing after them closes it. So a block opened
+    with three backticks and closed with four is closed, and a four-backtick block
+    that shows a lone triple-backtick line inside it is not cut off. An opening line
+    whose info string holds a backtick (`` ```x``` `` on one line) is inline code, not
+    a fence. A fence that does not start its line is not seen.
+    """
+    open_len = 0
+    for line in text.split("\n"):
+        m = _FENCE_LINE.match(line)
+        if m is None:
+            continue
+        ticks, rest = len(m.group(1)), m.group(2)
+        if open_len == 0:
+            if "`" not in rest:
+                open_len = ticks
+        elif ticks >= open_len and not rest.strip():
+            open_len = 0
+    return open_len > 0
+
+
 def truncation_reason(text: str) -> str | None:
     """Return why ``text`` looks cut off, or ``None``.
 
-    Signals, each cheap and conservative: an odd number of triple-backtick fences
-    (an unclosed code block); a final character that cannot end a sentence
+    Signals, each cheap and conservative: a code fence left open (see
+    ``unclosed_fence``); a final character that cannot end a sentence
     (comma, colon, open bracket, operator) unless the ending is a known complete
     form (see ``_closed_ending``); or a final word that is an article, conjunction
     or preposition (a single capital ``A``, an answer label, does not count).
@@ -180,7 +206,7 @@ def truncation_reason(text: str) -> str | None:
     stripped = text.rstrip()
     if not stripped:
         return None
-    if stripped.count("```") % 2 == 1:
+    if unclosed_fence(stripped):
         return "unclosed code fence"
     if stripped[-1] in _DANGLING_CHARS and not _closed_ending(stripped):
         return f"ends with {stripped[-1]!r}"

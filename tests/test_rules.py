@@ -186,3 +186,30 @@ def test_empty_tool_result_is_not_an_empty_turn():
         ]
     }
     assert [f.turn for f in check_empty_turn(normalize(rec))] == [3]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "```python\nx = 1\n````",  # opened with three, closed with four
+        "````python\nx = 1\n````",
+        "````md\n```\n````",  # a lone ``` line shown inside a four-backtick block
+        "````md\n```python\nx = 1\n```\n````",
+        "Use ```x``` inline.",
+    ],
+)
+def test_fences_pair_by_line_and_length(text):
+    assert truncation_reason(text) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "````python\nx = 1\n```",  # a shorter line does not close a longer fence
+        "```py\na\n```\nThen:\n```py\nb = 2",  # one closed block, then an open one
+        "```py\na\n```\n```py\nb\n```\n```py\nc = 3",
+        "```py\nx = 1\n``` trailing",  # a line with text after the ticks does not close
+    ],
+)
+def test_unclosed_fence_is_flagged(text):
+    assert truncation_reason(text) == "unclosed code fence"
