@@ -139,3 +139,25 @@ def test_empty_turn_trim_keeps_a_later_image_turn(write_jsonl, tmp_path):
     rows = [{"messages": [m("user", "q"), m("assistant", "a"), m("assistant", ""), image]}]
     result, lines = run_fix(write_jsonl, tmp_path, rows, ["empty-turn"])
     assert lines == [] and result.records_dropped == 1 and result.records_trimmed == 0
+
+
+def test_final_role_trim_keeps_every_exchange(write_jsonl, tmp_path):
+    turns = [m("user", "q1"), m("assistant", "a1"), m("user", "q2"), m("assistant", "a2")]
+    rows = [{"messages": turns + [m("user", "q3")]}]
+    result, lines = run_fix(write_jsonl, tmp_path, rows, ["final-role"])
+    assert [json.loads(x)["messages"] for x in lines] == [turns]
+    assert result.records_trimmed == 1
+
+
+def test_empty_turn_fix_drops_when_a_real_turn_follows(write_jsonl, tmp_path):
+    turns = [m("user", "q"), m("assistant", "a1"), m("user", ""), m("assistant", "a2")]
+    result, lines = run_fix(write_jsonl, tmp_path, [{"messages": turns}], ["empty-turn"])
+    assert lines == [] and result.records_dropped == 1 and result.records_trimmed == 0
+
+
+def test_blank_line_between_records_does_not_stop_the_copy(write_jsonl, tmp_path):
+    good = {"messages": [m("user", "q"), m("assistant", "a.")]}
+    bad = {"messages": [m("user", "q"), m("assistant", "a."), m("user", "more")]}
+    rows = [json.dumps(good), "", "   ", json.dumps(bad), json.dumps(good)]
+    result, lines = run_fix(write_jsonl, tmp_path, rows, ["final-role"])
+    assert len(lines) == 3 and result.written == 3 and result.records_trimmed == 1
