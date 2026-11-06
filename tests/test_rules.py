@@ -196,6 +196,10 @@ def test_empty_tool_result_is_not_an_empty_turn():
         "````md\n```\n````",  # a lone ``` line shown inside a four-backtick block
         "````md\n```python\nx = 1\n```\n````",
         "Use ```x``` inline.",
+        # A fence written after text on its line, opening or closing a block.
+        "Here is the program:\n```pascal\nbegin\nend. ```\n\nHope this helps.",
+        "Here is the script. ```\nprint(1)\n```\n\nRun it with python.",
+        "Use ```x``` and ```y``` inline, twice on one line.",
     ],
 )
 def test_fences_pair_by_line_and_length(text):
@@ -209,6 +213,8 @@ def test_fences_pair_by_line_and_length(text):
         "```py\na\n```\nThen:\n```py\nb = 2",  # one closed block, then an open one
         "```py\na\n```\n```py\nb\n```\n```py\nc = 3",
         "```py\nx = 1\n``` trailing",  # a line with text after the ticks does not close
+        "The script is as follows: ```\nimport os\nprint(os.getcwd(",  # opened after text
+        "````py\nx = 1\ny = 2 ```",  # a shorter trailing run does not close a longer fence
     ],
 )
 def test_unclosed_fence_is_flagged(text):

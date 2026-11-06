@@ -156,6 +156,7 @@ _DANGLING_WORDS = frozenset(
     "because if then than".split()
 )
 _FENCE_LINE = re.compile(r"^ {0,3}(`{3,})(.*)$")
+_TICK_RUN = re.compile(r"`{3,}")
 _LAST_WORD = re.compile(r"(?:^|\s)([A-Za-z]+)\s*$")
 _URL_END = re.compile(r"(?:^|\s)<?https?://\S*[^\s,;:(\[{]$")
 
@@ -182,12 +183,27 @@ def unclosed_fence(text: str) -> bool:
     with three backticks and closed with four is closed, and a four-backtick block
     that shows a lone triple-backtick line inside it is not cut off. An opening line
     whose info string holds a backtick (`` ```x``` `` on one line) is inline code, not
-    a fence. A fence that does not start its line is not seen.
+    a fence.
+
+    One step goes past CommonMark, for model output that writes a fence after text
+    on the same line (`` end. ``` `` closing a block, or `` as follows: ``` `` opening
+    one): a line that does not start with a fence but ends with a run of
+    three or more backticks, and holds an odd number of such runs (so ```` ```x``` ````
+    pairs are inline code), closes an open block whose fence is no longer than the
+    run, or opens a block when none is open. A fence in the middle of a line, with
+    text after it, is not seen.
     """
     open_len = 0
     for line in text.split("\n"):
         m = _FENCE_LINE.match(line)
         if m is None:
+            runs = _TICK_RUN.findall(line)
+            if len(runs) % 2 and line.rstrip().endswith(runs[-1]):
+                ticks = len(runs[-1])
+                if open_len == 0:
+                    open_len = ticks
+                elif ticks >= open_len:
+                    open_len = 0
             continue
         ticks, rest = len(m.group(1)), m.group(2)
         if open_len == 0:
