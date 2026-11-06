@@ -233,7 +233,7 @@ An earlier version of `truncated-final` also flagged a Telugu answer key ending 
 
 **Pretokens against a real tokenizer.** On the smoltalk slice, `--tokenizer tiktoken:cl100k_base` (`uv run --with tiktoken sftlint check data/smoltalk-magpie-ultra.jsonl --tokenizer tiktoken:cl100k_base --json data/smoltalk-magpie-ultra.cl100k.json`) gives a mean of 984.9 prompt tokens and 436.8 response tokens, against 989.2 and 438.4 pretokens: the means differ by 0.4 %. The maxima differ more (4,341 against 4,533 prompt tokens), so treat pretokens as an estimate for cl100k_base, not a bound.
 
-**Time.** With JSON and Markdown reports written, `/usr/bin/time -p` measured 3.45 s of wall time for the smoltalk slice (14 MB), 3.12 s for the single-turn Hermes file (17 MB) and 3.94 s for the multi-turn one (20 MB), on an arm64 laptop.
+**Time.** With JSON and Markdown reports written, three runs of `/usr/bin/time -p uv run sftlint check data/<file>.jsonl --json ... --markdown ...` took 4.28 to 4.44 s of wall time for the smoltalk slice (14 MB), 3.46 to 3.82 s for the single-turn Hermes file (17 MB) and 4.24 to 4.65 s for the multi-turn one (20 MB), on an arm64 laptop, including `uv run` start-up.
 
 ## Limitations
 
