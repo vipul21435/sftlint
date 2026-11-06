@@ -234,3 +234,22 @@ def test_image_only_turn_is_not_empty(write_jsonl):
         ]
     )
     assert main(["check", str(path)]) == 0
+
+
+def test_role_order_after_a_leading_system_turn():
+    sys_turn = ("system", "Be brief.")
+    two_users = run("role-order", conv(sys_turn, ("user", "a"), ("user", "b"), ("assistant", "c")))
+    assert [(f.turn, f.message) for f in two_users] == [(2, "two user turns in a row")]
+    stray_tool = run("role-order", conv(sys_turn, ("user", "a"), ("tool", "r"), ("assistant", "c")))
+    assert [(f.turn, f.message) for f in stray_tool] == [
+        (2, "tool turn does not follow an assistant tool call")
+    ]
+
+
+def test_tool_turn_after_an_assistant_turn_without_calls():
+    out = run(
+        "role-order", conv(("user", "a"), ("assistant", "b"), ("tool", "r"), ("assistant", "c"))
+    )
+    assert [(f.turn, f.message) for f in out] == [
+        (2, "tool turn does not follow an assistant tool call")
+    ]
