@@ -102,6 +102,7 @@ class Message:
     name: str | None = None
     content_missing: bool = False
     tool_results: list[ToolResult] = field(default_factory=list)
+    source_index: int | None = None  # position in the record's turn list, when it has one
 
     def results(self) -> list[ToolResult]:
         """The results a tool turn carries: tagged blocks, else one from its id and name."""
@@ -119,6 +120,7 @@ class Conversation:
     line: int = 0
     tools: list[dict[str, Any]] | None = None
     raw: Mapping[str, Any] | None = None
+    turns_key: str | None = None  # the field holding the turn list (messages, sharegpt)
 
 
 class FormatError(ValueError):
@@ -261,7 +263,7 @@ def _apply_tags(msg: Message) -> Message:
 def _messages(record: Mapping[str, Any]) -> list[Message]:
     key = next(k for k in _MESSAGE_KEYS if _list_of_dicts(record.get(k)))
     out = []
-    for m in record[key]:
+    for idx, m in enumerate(record[key]):
         raw_role = str(m.get("role", ""))
         role = _MESSAGES_ROLE_MAP.get(raw_role.lower(), raw_role)
         text, missing = _text(m.get("content"))
@@ -277,6 +279,7 @@ def _messages(record: Mapping[str, Any]) -> list[Message]:
             tool_call_id=m.get("tool_call_id"),
             name=m.get("name"),
             content_missing=missing,
+            source_index=idx,
         )
         out.append(_apply_tags(msg))
     return out
@@ -285,7 +288,7 @@ def _messages(record: Mapping[str, Any]) -> list[Message]:
 def _sharegpt(record: Mapping[str, Any]) -> list[Message]:
     key = next(k for k in _SHAREGPT_KEYS if _list_of_dicts(record.get(k)))
     out = []
-    for m in record[key]:
+    for idx, m in enumerate(record[key]):
         raw_role = str(m.get("from", ""))
         role = _SHAREGPT_ROLE_MAP.get(raw_role.lower(), raw_role)
         text, missing = _text(m.get("value"))
@@ -293,7 +296,7 @@ def _sharegpt(record: Mapping[str, Any]) -> list[Message]:
         if raw_role.lower() == "function_call":
             calls = _parse_function_call(text)
             text = ""
-        msg = Message(role, text, raw_role=raw_role, tool_calls=calls, content_missing=missing)
+        msg = Message(role, text, raw_role, calls, content_missing=missing, source_index=idx)
         out.append(_apply_tags(msg))
     if isinstance(record.get("system"), str) and record["system"].strip():
         out.insert(0, Message("system", record["system"], raw_role="system"))
@@ -337,6 +340,8 @@ def normalize(record: Mapping[str, Any], fmt: str | None = None, line: int = 0) 
     if detected != fmt:
         raise FormatError(f"record does not match format {fmt!r}")
     messages = _NORMALISERS[fmt](record)
+    keys = _SHAREGPT_KEYS if fmt == "sharegpt" else _MESSAGE_KEYS
+    turns_key = next((k for k in keys if _list_of_dicts(record.get(k))), None)
     tools = _load_tools(record.get("tools"))
     if tools is None:
         for m in messages:
@@ -344,7 +349,7 @@ def normalize(record: Mapping[str, Any], fmt: str | None = None, line: int = 0) 
                 bodies = _tag_bodies(m.content, "tools")
                 tools = _load_tools(bodies[0]) if bodies else None
                 break
-    return Conversation(messages=messages, fmt=fmt, line=line, tools=tools, raw=record)
+    return Conversation(messages, fmt, line, tools, record, turns_key)
 
 
 def _load_tools(value: Any) -> list[dict[str, Any]] | None:

@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 from sftlint import __version__
 from sftlint.findings import severity_rank
+from sftlint.fix import apply_fixes
 from sftlint.formats import FORMATS
 from sftlint.lint import lint
 from sftlint.loader import load
@@ -49,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="token counter for length stats: pretokens (default) or tiktoken:<encoding>",
     )
     check.add_argument(
+        "--fix", metavar="OUT", help="write a copy with what --fix-rules flag dropped or trimmed"
+    )
+    check.add_argument(
+        "--fix-rules", type=_ids, help="comma-separated rule ids whose findings --fix acts on"
+    )
+    check.add_argument(
         "--max-examples", type=int, default=20, help="findings listed in reports (default 20)"
     )
 
@@ -69,12 +76,20 @@ def _write(target: str, text: str) -> None:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
+    if bool(args.fix) != bool(args.fix_rules):
+        print("sftlint: --fix and --fix-rules go together", file=sys.stderr)
+        return 2
     try:
         counter = get_counter(args.tokenizer)
         data = load(args.path, args.format)
         report = lint(
             data, args.path, args.select, args.ignore, args.outlier_z, counter, args.tokenizer
         )
+        if args.fix:
+            unknown = set(args.fix_rules) - set(RULES)
+            if unknown:
+                raise ValueError("unknown rule id: " + ", ".join(sorted(unknown)))
+            fixed = apply_fixes(args.path, data, report.findings, args.fix_rules, args.fix)
     except (OSError, ValueError) as exc:
         print(f"sftlint: {exc}", file=sys.stderr)
         return 2
@@ -91,6 +106,8 @@ def _cmd_check(args: argparse.Namespace) -> int:
         )
         for rule, n in report.counts().items():
             print(f"  {rule:<18} {RULES[rule].severity:<8} {n}")
+    if args.fix:
+        print(f"fix: {fixed.summary()} -> {args.fix}", file=sys.stderr)
     worst = report.worst()
     if args.fail_on == "never" or worst is None:
         return 0
