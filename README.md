@@ -175,7 +175,7 @@ uv run sftlint check data/aya-test.jsonl --json data/aya-test.report.json
 | `duplicate-turn` | 3 | 0 | 0 | 0 |
 | `duplicate-prompt` | 0 | 0 | 0 | 10 |
 | `pii-email` | 0 | 62 | 82 | 0 |
-| `pii-card` | 0 | 2 | 3 | 0 |
+| `pii-card` | 0 | 2 | 2 | 0 |
 | `secret-key` | 0 | 0 | 3 | 0 |
 | `length-outlier` | 76 | 125 | 167 | 34 |
 | `refusal` | 0 | 0 | 0 | 1 |
@@ -196,7 +196,7 @@ The chart (`uv run --with matplotlib python scripts/plot_lengths.py data/smoltal
 - `tool-result-match` (multi-turn only), 263 findings in 158 records: 258 are `<tool_response>` blocks for a function the assistant never called in that turn (for example the assistant calls `book_appointment` and the tool turn also returns `send_appointment_reminder`), and 5 are calls that get no response.
 - `role-order`, 10: the records whose turns run system, human, tool, gpt, with a tool result before any call. `final-role`, 163: conversations that end on a tool turn, with no final answer.
 - `secret-key`, 3: synthetic `access_token` values inside tool results; credential-shaped, made up by the generator.
-- `pii-email` matches are addresses written into the synthetic requests and call arguments; the rule cannot tell a made-up address on a real domain from a real one, which is why it is a warning. The `pii-card` matches are the widely published test card number starting 4111.
+- `pii-email` matches are addresses written into the synthetic requests and call arguments; the rule cannot tell a made-up address on a real domain from a real one, which is why it is a warning. In both files the 2 `pii-card` findings are the widely published test card number starting 4111, at lines 626 and 831. An earlier version of the card pattern also matched a 16-digit run inside a hex object id (`5fa9e56f` followed by 16 digits) in a multi-turn tool result; digit runs that touch a letter or underscore are now skipped.
 
 `--fix` on the multi-turn file with the three structural tool rules:
 

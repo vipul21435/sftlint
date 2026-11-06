@@ -7,7 +7,8 @@
   ``recipient@``) are skipped for the same reason.
 * ``pii-card``: 13 to 19 digits, optionally grouped by single spaces or hyphens, that
   start with a digit from 2 to 6 (the card-network industry identifiers), pass the
-  Luhn checksum, and do not consist of one repeated digit.
+  Luhn checksum, and do not consist of one repeated digit. A digit run that touches
+  a letter, digit, underscore or hyphen is skipped as part of an identifier.
 * ``secret-key``: a string with a known credential prefix (cloud access key ids,
   personal access tokens, chat-app bot tokens, PEM private-key headers), or a value
   assigned to a key-like name (``api_key = ...``, ``token: ...``) that is at least 20
@@ -38,7 +39,9 @@ _RESERVED_TLDS = (".test", ".example", ".invalid", ".localhost", ".local")
 # Major industry identifiers 2-6 cover the card networks (ISO/IEC 7812); this also
 # keeps ISBN-13 numbers (978/979...) and long digit runs starting with 0, 1 or 9 out.
 _CARD_FIRST_DIGITS = "23456"
-_CARD = re.compile(r"(?<![\d-])(?:\d[ -]?){12,18}\d(?![\d-])")
+# A digit run glued to letters or underscores (a hex object id, a hash, a variable
+# name) is part of an identifier, not a card number written out.
+_CARD = re.compile(r"(?<![\w-])(?:\d[ -]?){12,18}\d(?![\w-])")
 
 _PREFIXED_SECRETS = [
     ("cloud access key id", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),

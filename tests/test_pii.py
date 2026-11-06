@@ -99,6 +99,14 @@ def test_rule_wrappers_report_turn_and_mask():
     assert check_secret_key(conv)[0].turn == 1
 
 
+def test_digits_inside_identifiers_are_not_cards():
+    card = "5817629592874208"
+    assert luhn_valid(card) and find_cards(card) == [card]
+    assert find_cards("id 5fa9e56f" + card + " found") == []  # hex object id
+    assert find_cards(card + "abc") == [] and find_cards("ref_" + card) == []
+    assert find_cards(f"({card}).") == [card]
+
+
 def test_isbn_and_low_first_digit_are_not_cards():
     isbn = luhn_complete("978" + rand(string.digits, 9))
     assert len(isbn) == 13 and find_cards(isbn) == []
