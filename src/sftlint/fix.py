@@ -105,11 +105,10 @@ def apply_fixes(
             conv = convs.get(lineno)
             rule_ids = sorted({f.rule for f in hits})
             cut = None if drops or conv is None else _cut_point(conv, hits)
-            if cut is None:
+            if cut is None or conv is None or conv.turns_key is None:
                 result.records_dropped += 1
                 result.dropped.update(rule_ids)
                 continue
-            assert conv is not None and conv.turns_key is not None
             record = copy.deepcopy(dict(conv.raw or {}))
             first_cut = conv.messages[cut].source_index if cut < len(conv.messages) else None
             if first_cut is not None:
