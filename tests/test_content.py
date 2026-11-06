@@ -27,6 +27,11 @@ def qa(q, a):
         "Sure. I can’t assist with that request though.",
         "I am unable to comply.",
         "It's not appropriate to share someone's address.",
+        "I'm sorry, I can't assist with that.",
+        "Sorry, I can't help with that.",
+        "I'm really sorry, but I can't help with that.",
+        "Unfortunately, I cannot provide that information.",
+        "I am so sorry, I won’t write that.",
     ],
 )
 def test_refusals(text):
@@ -39,6 +44,10 @@ def test_refusals(text):
         "As an example, take x = 2.",
         "Sorry to hear that. Here is a plan.",
         "I cannot stress this enough: test first.",
+        "I can't help but wonder why.",
+        "Unfortunately, I can't help but laugh at that one.",
+        "Unfortunately, the bridge is closed.",
+        "Sorry for the delay. Here it is.",
         "Here is the answer. " + "x" * 400 + " I cannot help with that.",
         "",
     ],

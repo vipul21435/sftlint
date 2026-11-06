@@ -31,17 +31,29 @@ REFUSAL_WINDOW = 300
 MIN_LETTERS = 20
 MIN_SHARE = 0.6
 
+_APOSTROPHE = "(?:'|’)"
+_CANNOT = (
+    rf"i (?:cannot|can{_APOSTROPHE}?t|can not|won{_APOSTROPHE}?t|will not|am unable to|"
+    rf"{_APOSTROPHE}m unable to|am not able to|{_APOSTROPHE}m not able to)"
+)
+_REFUSAL_VERB = (
+    r"(?:help(?! but)|assist|provide|fulfil|comply|create|generate|write|support|engage|"
+    r"do that|answer)"
+)
+# An apology or hedge that may open the refusal clause: "I'm really sorry, I can't ...".
+_SORRY = rf"(?:(?:i{_APOSTROPHE}?m|i am) (?:really |very |so |truly )?sorry|sorry|unfortunately)"
+
 _REFUSAL = re.compile(
     r"(?i)(?:^|(?<=[.!?\n]\s)|(?<=\n)|(?<=^\W))(?:"
-    r"i(?:'|’)?m sorry,? but|i am sorry,? but|sorry,? but i (?:can(?:'|’)?t|cannot|won(?:'|’)?t)|"
+    rf"(?:i{_APOSTROPHE}?m|i am) (?:really |very |so |truly )?sorry,? but|"
+    rf"sorry,? but i (?:can{_APOSTROPHE}?t|cannot|won{_APOSTROPHE}?t)|"
     r"i apologi[sz]e,? but|"
-    r"i (?:cannot|can(?:'|’)?t|can not|won(?:'|’)?t|will not|am unable to|(?:'|’)m unable to|"
-    r"am not able to|(?:'|’)m not able to) (?:help(?! but)|assist|provide|fulfil|comply|"
-    r"create|generate|write|support|engage|do that|answer)|"
+    rf"{_SORRY},?\s+(?:but\s+)?{_CANNOT} {_REFUSAL_VERB}|"
+    rf"{_CANNOT} {_REFUSAL_VERB}|"
     r"as an ai(?: language model| assistant| model)?,|"
-    r"i(?:'|’)?m (?:just )?an ai\b|i am (?:just )?an ai\b|"
+    rf"i{_APOSTROPHE}?m (?:just )?an ai\b|i am (?:just )?an ai\b|"
     r"as a responsible ai|"
-    r"(?:it(?:'|’)?s|it is) not appropriate (?:for me|to (?:help|assist|"
+    rf"(?:it{_APOSTROPHE}?s|it is) not appropriate (?:for me|to (?:help|assist|"
     r"provide|share|give|disclose|reveal|create|generate|write|make)\b)"
     r")"
 )
