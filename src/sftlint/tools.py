@@ -43,6 +43,11 @@ def declared_tools(conv: Conversation) -> dict[str, Any] | None:
     return out or None
 
 
+def _reject_constant(name: str) -> Any:
+    # Python's json module accepts NaN and Infinity; the JSON grammar has neither.
+    raise ValueError(f"{name} is not a JSON value")
+
+
 def parse_arguments(call: ToolCall) -> tuple[dict[str, Any] | None, str | None]:
     """Return ``(arguments, error)``. Missing arguments count as an empty object."""
     if call.parse_error:
@@ -54,9 +59,11 @@ def parse_arguments(call: ToolCall) -> tuple[dict[str, Any] | None, str | None]:
         if not args.strip():
             return {}, None
         try:
-            args = json.loads(args)
+            args = json.loads(args, parse_constant=_reject_constant)
         except json.JSONDecodeError as exc:
             return None, f"arguments are not valid JSON: {exc.msg} at column {exc.colno}"
+        except ValueError as exc:
+            return None, f"arguments are not valid JSON: {exc}"
     if not isinstance(args, Mapping):
         return None, f"arguments are a JSON {type(args).__name__}, expected an object"
     return dict(args), None

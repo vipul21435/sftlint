@@ -191,3 +191,10 @@ def test_id_less_tagged_call_answered_by_tool_call_id():
         ]
     }
     assert check_tool_result_match(normalize(rec)) == []
+
+
+def test_nan_and_infinity_are_not_json():
+    for bad in ('{"n": NaN}', '{"n": Infinity}', '{"n": -Infinity}'):
+        args, err = parse_arguments(ToolCall("f", bad))
+        assert args is None and err.startswith("arguments are not valid JSON: ")
+    assert parse_arguments(ToolCall("f", '{"n": "NaN"}')) == ({"n": "NaN"}, None)
