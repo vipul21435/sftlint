@@ -11,7 +11,8 @@ Each rule has one fix action:
 * ``drop`` (every other rule): drop each record with a finding of that rule.
 
 Only findings of the rules passed in ``rules`` are acted on; other findings are left
-alone, and records without a selected finding are written back byte for byte. The
+alone, and records without a selected finding are written back unchanged (blank lines are
+skipped). The
 fixed file is not re-linted: run ``sftlint check`` on it again.
 """
 
