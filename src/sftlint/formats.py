@@ -83,11 +83,16 @@ class ToolCall:
 
 @dataclass
 class ToolResult:
-    """One result inside a tool turn: the call id and function name it answers, when given."""
+    """One result inside a tool turn: the call id and function name it answers, when given.
+
+    ``name_hint`` is a ``name`` field that may be the function's own output rather than
+    the call it answers; it is used only when it names a pending call.
+    """
 
     id: str | None = None
     name: str | None = None
     parse_error: str | None = None
+    name_hint: str | None = None
 
 
 @dataclass
@@ -276,13 +281,21 @@ def parse_tagged_calls(text: str) -> tuple[list[ToolCall], str]:
     return calls, _strip_tags(text, "tool_call")
 
 
+_ENVELOPE_KEYS = frozenset({"name", "content", "tool_call_id"})
+
+
 def parse_tagged_results(text: str) -> list[ToolResult]:
     """Extract ``<tool_response>`` blocks from a tool turn.
 
     A block is read as the Hermes envelope ``{"name": ..., "content": ...}`` (plus an
-    optional ``tool_call_id``) only when it has those keys. Any other JSON is the
-    function's own output, so its fields (an ``id`` or ``name`` of a user record, say)
-    say nothing about which call it answers, and the result is matched by position.
+    optional ``tool_call_id``) only when it has a ``content`` key, no key outside those
+    three, and a ``content`` that is not a string (the envelope wraps the function's
+    output, an object in the Hermes data). Then its ``name`` says which call it
+    answers. Any other JSON is the function's own output: a file record
+    ``{"name": "notes.txt", "content": "..."}`` or a product with ``name`` and
+    ``price`` says nothing about the call, so the result is matched by position, and
+    its ``name`` (when a string) is kept only as a hint that counts when it names a
+    pending call. A ``tool_call_id`` is read whenever the other keys fit the envelope.
     """
     out = []
     for body in _tag_bodies(text, "tool_response"):
@@ -291,15 +304,16 @@ def parse_tagged_results(text: str) -> list[ToolResult]:
         except json.JSONDecodeError as exc:
             out.append(ToolResult(parse_error=f"invalid JSON: {exc.msg}"))
             continue
-        if isinstance(obj, Mapping) and "content" in obj:
-            rid, name = obj.get("tool_call_id"), obj.get("name")
-            out.append(
-                ToolResult(
-                    rid if isinstance(rid, str) else None, name if isinstance(name, str) else None
-                )
-            )
-        else:
+        if not isinstance(obj, Mapping):
             out.append(ToolResult())
+            continue
+        name = obj.get("name") if isinstance(obj.get("name"), str) else None
+        rid = obj.get("tool_call_id") if isinstance(obj.get("tool_call_id"), str) else None
+        fits = "content" in obj and set(obj) <= _ENVELOPE_KEYS
+        if fits and not isinstance(obj["content"], str):
+            out.append(ToolResult(rid, name))
+        else:
+            out.append(ToolResult(rid if fits else None, name_hint=name))
     return out
 
 

@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from sftlint.findings import Finding
-from sftlint.formats import Conversation, ToolCall
+from sftlint.formats import Conversation, ToolCall, ToolResult
 from sftlint.rules import RULES, rule
 from sftlint.schema import validate
 
@@ -129,12 +129,20 @@ def check_tool_args_schema(conv: Conversation, max_errors: int = 3) -> list[Find
     return out
 
 
-def _match(pending: list[ToolCall], rid: str | None, name: str | None) -> ToolCall | None:
-    """By id when the pending calls carry ids, else by function name, else the first."""
-    if rid is not None and any(c.id is not None for c in pending):
-        return next((c for c in pending if c.id == rid), None)
-    if name is not None:
-        return next((c for c in pending if c.name == name), None)
+def _match(pending: list[ToolCall], res: ToolResult) -> ToolCall | None:
+    """By id when the pending calls carry ids, else by function name, else the first.
+
+    A name hint (a ``name`` field that may be payload) picks a call only when it names
+    one; otherwise the result takes the first pending call.
+    """
+    if res.id is not None and any(c.id is not None for c in pending):
+        return next((c for c in pending if c.id == res.id), None)
+    if res.name is not None:
+        return next((c for c in pending if c.name == res.name), None)
+    if res.name_hint is not None:
+        hit = next((c for c in pending if c.name == res.name_hint), None)
+        if hit is not None:
+            return hit
     return pending[0] if pending else None
 
 
@@ -156,7 +164,7 @@ def check_tool_result_match(conv: Conversation) -> list[Finding]:
                 if res.parse_error:
                     out.append(_f("tool-result-match", conv, f"tool result: {res.parse_error}", j))
                     continue
-                hit = _match(pending, res.id, res.name)
+                hit = _match(pending, res)
                 if hit is None:
                     key = f"id {res.id!r}" if res.id is not None else repr(res.name or "result")
                     out.append(

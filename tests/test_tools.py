@@ -198,3 +198,73 @@ def test_nan_and_infinity_are_not_json():
         args, err = parse_arguments(ToolCall("f", bad))
         assert args is None and err.startswith("arguments are not valid JSON: ")
     assert parse_arguments(ToolCall("f", '{"n": "NaN"}')) == ({"n": "NaN"}, None)
+
+
+def test_payload_with_name_and_content_is_not_an_envelope():
+    read = '<tool_call>{"name": "read_file", "arguments": {"path": "notes.txt"}}</tool_call>'
+    rec = {
+        "conversations": [
+            {"from": "human", "value": "What is in notes.txt?"},
+            {"from": "gpt", "value": read},
+            {
+                "from": "tool",
+                "value": '<tool_response>{"name": "notes.txt", "content": "buy milk"}'
+                "</tool_response>",
+            },
+            {"from": "gpt", "value": "It says: buy milk."},
+        ]
+    }
+    assert check_tool_result_match(normalize(rec)) == []
+
+
+def test_payload_with_extra_fields_is_matched_by_position():
+    get = '<tool_call>{"name": "get_product", "arguments": {"id": 7}}</tool_call>'
+    body = {"name": "Blue Widget", "content": {"colour": "blue"}, "price": 3}
+    rec = {
+        "messages": [
+            {"role": "user", "content": "Price of product 7?"},
+            {"role": "assistant", "content": get},
+            {"role": "tool", "content": f"<tool_response>{json.dumps(body)}</tool_response>"},
+            {"role": "assistant", "content": "It costs 3."},
+        ]
+    }
+    assert check_tool_result_match(normalize(rec)) == []
+
+
+def test_name_hint_picks_the_call_it_names():
+    calls = (
+        '<tool_call>{"name": "a", "arguments": {}}</tool_call>'
+        '<tool_call>{"name": "b", "arguments": {}}</tool_call>'
+    )
+    rec = {
+        "conversations": [
+            {"from": "human", "value": "q"},
+            {"from": "gpt", "value": calls},
+            {
+                "from": "tool",
+                "value": '<tool_response>{"name": "b", "content": "x"}</tool_response>',
+            },
+            {"from": "gpt", "value": "done"},
+        ]
+    }
+    assert [f.message for f in check_tool_result_match(normalize(rec))] == [
+        "call 'a' gets no result"
+    ]
+
+
+def test_envelope_with_object_content_still_names_its_call():
+    rec = {
+        "conversations": [
+            {"from": "human", "value": "q"},
+            {"from": "gpt", "value": '<tool_call>{"name": "a", "arguments": {}}</tool_call>'},
+            {
+                "from": "tool",
+                "value": '<tool_response>{"name": "z", "content": {}}</tool_response>',
+            },
+            {"from": "gpt", "value": "done"},
+        ]
+    }
+    assert [f.message for f in check_tool_result_match(normalize(rec))] == [
+        "result 'z' answers no pending call",
+        "call 'a' gets no result",
+    ]
