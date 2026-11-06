@@ -31,8 +31,9 @@ def rand(alphabet: str, n: int) -> str:
 
 
 def test_luhn_known_values():
-    assert luhn_valid("79927398713")  # the worked example on the Luhn algorithm page
-    assert not luhn_valid("79927398710")
+    assert luhn_valid("17893729974")  # the worked example on the Luhn algorithm page
+    assert luhn_valid("79927398713")
+    assert not luhn_valid("17893729975")
     assert not luhn_valid("12a4") and not luhn_valid("7")
 
 
