@@ -149,6 +149,20 @@ _DANGLING_WORDS = frozenset(
     "because if then than".split()
 )
 _LAST_WORD = re.compile(r"(?:^|\s)([A-Za-z]+)\s*$")
+_URL_END = re.compile(r"(?:^|\s)<?https?://\S*[^\s,;:(\[{]$")
+
+
+def _closed_ending(stripped: str) -> bool:
+    """Endings whose last character is in ``_DANGLING_CHARS`` but that are complete:
+    a Markdown table row (``| 1 | 2 |``), a name such as ``C++``, a URL ending in ``/``,
+    a ``--`` sign-off, a smiley, or a ``||`` verse end."""
+    last_line = stripped.rsplit("\n", 1)[-1].strip()
+    if len(last_line) > 1 and last_line.startswith("|") and last_line.endswith("|"):
+        return True
+    if _URL_END.search(stripped):
+        return True
+    # "||" closes a verse in texts that write the danda as a pipe; ":)" is a smiley.
+    return stripped.endswith(("++", "--", ":)", ":-)", "||"))
 
 
 def truncation_reason(text: str) -> str | None:
@@ -156,16 +170,16 @@ def truncation_reason(text: str) -> str | None:
 
     Signals, each cheap and conservative: an odd number of triple-backtick fences
     (an unclosed code block); a final character that cannot end a sentence
-    (comma, colon, open bracket, operator); or a final word that is an article,
-    conjunction or preposition.
+    (comma, colon, open bracket, operator) unless the ending is a known complete
+    form (see ``_closed_ending``); or a final word that is an article, conjunction
+    or preposition.
     """
     stripped = text.rstrip()
     if not stripped:
         return None
     if stripped.count("```") % 2 == 1:
         return "unclosed code fence"
-    # "||" closes a verse in texts that write the danda as a pipe; ":)" is a smiley.
-    if stripped[-1] in _DANGLING_CHARS and not stripped.endswith(("--", ":)", ":-)", "||")):
+    if stripped[-1] in _DANGLING_CHARS and not _closed_ending(stripped):
         return f"ends with {stripped[-1]!r}"
     match = _LAST_WORD.search(stripped)
     if match and match.group(1).lower() in _DANGLING_WORDS:

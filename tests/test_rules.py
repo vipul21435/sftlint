@@ -140,7 +140,23 @@ def test_truncation_ignores_answer_keys_and_verse_endings(text):
     assert truncation_reason(text) is None
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "| n | square |\n|---|---|\n| 1 | 1 |\n| 2 | 4 |",
+        "The language is C++",
+        "See https://docs.python.org/3/",
+        "Docs: <https://example.org/a/>",
+    ],
+)
+def test_truncation_ignores_table_rows_cpp_and_urls(text):
+    assert truncation_reason(text) is None
+
+
 def test_truncation_still_catches_a_dangling_article():
     assert truncation_reason("He picked up a") == "ends with the word 'a'"
     assert truncation_reason("a") == "ends with the word 'a'"
     assert truncation_reason("one|") == "ends with '|'"
+    assert truncation_reason("x = a +") == "ends with '+'"
+    assert truncation_reason("divide by /") == "ends with '/'"
+    assert truncation_reason("Sources: https://example.org/a,") == "ends with ','"

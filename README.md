@@ -251,7 +251,7 @@ Not implemented:
 
 Known behaviour:
 
-- `truncated-final` is a heuristic. An answer that legitimately ends with a colon, or a code answer that closes its fence with four backticks, is flagged; an answer cut at a sentence boundary is not.
+- `truncated-final` is a heuristic. A final Markdown table row (a last line that starts and ends with `|`), a last word ending in `++` and a final URL ending in `/` are treated as complete. Still flagged: an answer that legitimately ends with a colon, a semicolon-terminated list item, a formula ending in an operator, a pipe that does not close a table row, and a code answer that closes its fence with four backticks. An answer cut at a sentence boundary is not caught. Rerunning the four files above after the table, `++` and URL exceptions were added gave the same counts.
 - `duplicate-prompt` is exact. Prompts that differ by one character are not duplicates here.
 - `length-outlier` is relative to the file: in a file that is mostly broken, the broken records are the norm.
 - `pii-*` and `secret-key` are pattern matches with validation, not a PII classifier. Names, phone numbers and postal addresses are not detected.
