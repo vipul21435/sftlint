@@ -82,7 +82,7 @@ Exit codes: 0 when no finding is at or above `--fail-on` (default `error`; `neve
 
 ## How it works
 
-**Formats.** Each record is normalised to a list of `(role, content, tool_calls, tool results)` turns plus the declared tools. `--format auto` (the default) takes a majority vote of per-record detection over the first 200 records; a record that does not match the file format is reported as `format-mismatch` instead of being guessed at. Supported layouts:
+**Formats.** Each record is normalised to a list of `(role, content, tool_calls, tool results)` turns plus the declared tools. `--format auto` (the default) takes a majority vote of per-record detection over the first 200 records; a record that does not have the file format's shape is reported as `format-mismatch` instead of being guessed at. `--format NAME` checks each record against that format's shape only, so it can pick a layout that detection would rank lower for a record that matches two. Supported layouts:
 
 | format | shape | notes |
 |---|---|---|
@@ -256,6 +256,7 @@ Not implemented:
 Known behaviour:
 
 - `truncated-final` is a heuristic. A final Markdown table row (a last line that starts and ends with `|`), a last word ending in `++` and a final URL ending in `/` are treated as complete. Still flagged: an answer that legitimately ends with a colon, a semicolon-terminated list item, a formula ending in an operator, a pipe that does not close a table row, and a code answer that closes its fence with four backticks. An answer cut at a sentence boundary is not caught. Rerunning the four files above after the table, `++` and URL exceptions were added gave the same counts.
+- Turn numbers in findings count normalised turns, from 0. A top-level `system` field (ShareGPT, Alpaca) becomes turn 0, so in such a record `turn 3` is `conversations[2]`.
 - `duplicate-prompt` is exact. Prompts that differ by one character are not duplicates here.
 - `length-outlier` is relative to the file: in a file that is mostly broken, the broken records are the norm.
 - `pii-*` and `secret-key` are pattern matches with validation, not a PII classifier. Names, phone numbers and postal addresses are not detected. No IBAN occurs in the four files above, so `pii-iban` is tested on fixtures only.

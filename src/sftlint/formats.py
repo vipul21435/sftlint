@@ -136,26 +136,51 @@ def _list_of_dicts(value: Any) -> bool:
     return isinstance(value, list) and len(value) > 0 and all(isinstance(m, dict) for m in value)
 
 
+def _is_sharegpt(record: Mapping[str, Any]) -> bool:
+    return any(
+        _list_of_dicts(v := record.get(key)) and all("from" in m and "value" in m for m in v)
+        for key in _SHAREGPT_KEYS
+    )
+
+
+def _is_messages(record: Mapping[str, Any]) -> bool:
+    return any(
+        _list_of_dicts(v := record.get(key)) and all("role" in m for m in v)
+        for key in _MESSAGE_KEYS
+    )
+
+
+def _is_alpaca(record: Mapping[str, Any]) -> bool:
+    return isinstance(record.get("instruction"), str) and isinstance(record.get("output"), str)
+
+
+def _is_prompt_completion(record: Mapping[str, Any]) -> bool:
+    return isinstance(record.get("prompt"), str) and isinstance(record.get("completion"), str)
+
+
+def _is_template_text(record: Mapping[str, Any]) -> bool:
+    text = record.get("text")
+    return isinstance(text, str) and _template_layout(text) is not None
+
+
+# In detection order: a record matching several shapes is detected as the first.
+_SHAPES = {
+    "sharegpt": _is_sharegpt,
+    "messages": _is_messages,
+    "alpaca": _is_alpaca,
+    "prompt-completion": _is_prompt_completion,
+    "template-text": _is_template_text,
+}
+
+
+def matches_format(record: Any, fmt: str) -> bool:
+    """Whether ``record`` has the shape of ``fmt`` (it may match other formats too)."""
+    return isinstance(record, Mapping) and fmt in _SHAPES and _SHAPES[fmt](record)
+
+
 def detect_format(record: Any) -> str | None:
     """Return the format name of one record, or ``None`` if it matches none."""
-    if not isinstance(record, Mapping):
-        return None
-    for key in _SHAREGPT_KEYS:
-        value = record.get(key)
-        if _list_of_dicts(value) and all("from" in m and "value" in m for m in value):
-            return "sharegpt"
-    for key in _MESSAGE_KEYS:
-        value = record.get(key)
-        if _list_of_dicts(value) and all("role" in m for m in value):
-            return "messages"
-    if isinstance(record.get("instruction"), str) and isinstance(record.get("output"), str):
-        return "alpaca"
-    if isinstance(record.get("prompt"), str) and isinstance(record.get("completion"), str):
-        return "prompt-completion"
-    text = record.get("text")
-    if isinstance(text, str) and _template_layout(text) is not None:
-        return "template-text"
-    return None
+    return next((fmt for fmt in _SHAPES if matches_format(record, fmt)), None)
 
 
 def detect_file_format(records: Iterable[Any], sample: int = 200) -> str | None:
@@ -402,11 +427,10 @@ _NORMALISERS = {
 
 def normalize(record: Mapping[str, Any], fmt: str | None = None, line: int = 0) -> Conversation:
     """Normalise one record. With ``fmt=None`` the format is detected per record."""
-    detected = detect_format(record)
-    fmt = fmt or detected
+    fmt = fmt or detect_format(record)
     if fmt not in _NORMALISERS:
         raise FormatError("record matches none of: " + ", ".join(FORMATS))
-    if detected != fmt:
+    if not matches_format(record, fmt):
         raise FormatError(f"record does not match format {fmt!r}")
     messages = _NORMALISERS[fmt](record)
     keys = _SHAREGPT_KEYS if fmt == "sharegpt" else _MESSAGE_KEYS

@@ -189,3 +189,12 @@ def test_template_text_zephyr_and_llama3():
     assert [m.content for m in conv.messages] == ["Hi", "Hello, how can I"]
     assert conv.messages[-1].unterminated
     assert detect_format({"text": "plain prose"}) is None
+
+
+def test_explicit_format_may_pick_a_lower_ranked_layout():
+    rec = {"messages": [{"role": "user", "content": "Hi"}], "prompt": "Hi", "completion": "Hello."}
+    assert detect_format(rec) == "messages"
+    conv = normalize(rec, "prompt-completion")
+    assert [m.role for m in conv.messages] == ["user", "assistant"]
+    with pytest.raises(FormatError):
+        normalize(rec, "alpaca")
