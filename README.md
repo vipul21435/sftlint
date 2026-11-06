@@ -1,10 +1,18 @@
 # sftlint
 
-A linter for chat, SFT and tool-calling datasets in JSONL: it checks turn structure, truncation, tool calls against their declared schemas, refusals, language mix, duplicate prompts, length outliers and PII or secret patterns, writes a Markdown or JSON report with an exit code for CI, and can write a copy with only the flagged records or turns removed.
+[![ci](https://github.com/vipul21435/sftlint/actions/workflows/ci.yml/badge.svg)](https://github.com/vipul21435/sftlint/actions/workflows/ci.yml)
+
+sftlint checks chat, SFT and tool-calling JSONL files for structural, tool-call, truncation, duplicate and PII problems, and writes a Markdown or JSON report with an exit code for CI; `--fix` writes a copy without what a named rule flags.
+
+On the public Hermes function-calling v1 file (1,893 records) it finds 793 tool calls whose arguments are not JSON and 76 that fail their declared schema; on 2,000 smoltalk conversations it flags 5 answers cut off inside a code block (commands and full table under [Results](#results-on-public-data)).
 
 ## Why this is hard
 
-A fine-tuning file can parse as valid JSON on every line and still teach the wrong thing. A system turn in the middle of a conversation, two user turns in a row, or an empty assistant turn is accepted by most loaders and then rendered by a chat template into a token sequence the model never sees at inference time. A final answer cut off by a generation limit trains the model to stop mid-sentence. A credential pasted into a prompt is memorised. Tool-calling data adds its own failures: arguments that are not JSON, arguments that ignore the declared schema, results that answer a call nobody made. None of these are schema errors of the file, and they hide in files of hundreds of thousands of records written in five or six slightly different layouts (OpenAI `messages`, ShareGPT `from`/`value`, Alpaca `instruction`/`output`, prompt/completion pairs, text already rendered by a chat template, tool calls as JSON fields or as tags inside the text). Each check also has to be conservative: a rule that fires on a tenth of a clean dataset is switched off and never read again.
+A fine-tuning file can parse as valid JSON on every line and still teach the wrong thing, and none of the faults below is a schema error of the file:
+
+- **Turn structure.** A system turn in the middle of a conversation, two user turns in a row or an empty assistant turn is accepted by most loaders and then rendered by a chat template into a token sequence the model never sees at inference time. The same structure is written in five or six slightly different layouts (OpenAI `messages`, ShareGPT `from`/`value`, Alpaca `instruction`/`output`, prompt/completion pairs, text already rendered by a chat template), so each check has to read all of them.
+- **Truncation and secrets.** A final answer cut off by a generation limit trains the model to stop mid-sentence, and a credential pasted into a prompt is memorised. Both are found only by heuristics, and a rule that fires on a tenth of a clean dataset is switched off and never read again, so each one needs a validation step.
+- **Tool calls.** Arguments that are not JSON, arguments that ignore the declared schema, and results that answer a call nobody made. Calls appear as JSON fields or as tags inside the text, and results carry an id, a function name or nothing.
 
 ## Install
 
@@ -16,9 +24,10 @@ Python 3.10 or newer. No runtime dependencies outside the standard library. `pip
 
 ## Quickstart
 
-`examples/sample.jsonl` has thirteen small conversations, eleven of them with a planted problem.
+`examples/sample.jsonl` has thirteen small conversations, eleven of them with a planted problem. It is in the repository, so clone it first:
 
 ```
+$ git clone https://github.com/vipul21435/sftlint && cd sftlint
 $ sftlint check examples/sample.jsonl
 examples/sample.jsonl: 13 records, format messages, 11 with findings (8 errors, 4 warnings, 2 info)
   duplicate-prompt   warning  1
@@ -150,9 +159,28 @@ Matches are masked in reports (first and last two characters kept), and each dis
 
 **Tokens.** Length statistics are reported in characters, whitespace words and tokens. The default token counter, `pretokens`, counts the pieces of GPT-2's pre-tokenization pattern, rewritten for the `re` module. GPT-2's BPE never merges across those pieces, so for GPT-2 the count is a lower bound, up to the places where `re` classes differ from `\p{L}` and `\p{N}` (some combining marks and non-decimal numerals). `--tokenizer tiktoken:<encoding>` counts real BPE tokens with tiktoken. A tool call counts as its `{"name", "arguments"}` JSON, since those are tokens the model is trained on.
 
-**Fix.** `--fix OUT --fix-rules a,b` writes a copy of the input. Records without a finding of a named rule are copied unchanged (blank lines are not copied). `final-role` and `empty-turn` trim: `final-role` cuts the turns after the last assistant turn, `empty-turn` cuts trailing empty turns. A trim that would leave a record not ending in a non-empty assistant turn, or a record with no turn list (Alpaca, prompt/completion, rendered text), drops the record instead. Every other rule drops the records it flags. The copy is not re-linted; run `sftlint check` on it again. The summary line counts each record under every named rule it has a finding of, so the per-rule counts overlap and can add up to more than the records dropped or trimmed.
+**Fix.** `--fix OUT --fix-rules a,b` writes a copy of the input. Records without a finding of a named rule are copied unchanged (blank lines are not copied). `final-role` and `empty-turn` trim: `final-role` cuts the turns after the last assistant turn, `empty-turn` cuts trailing empty turns. A trim that would leave a record not ending in a non-empty assistant turn, or a record with no turn list (Alpaca, prompt/completion, rendered text), drops the record instead. Every other rule drops the records it flags. The copy is written to a temporary file next to `OUT` and moved into place when complete, so `OUT` may be the input file itself. The copy is not re-linted; run `sftlint check` on it again. The summary line counts each record under every named rule it has a finding of, so the per-rule counts overlap and can add up to more than the records dropped or trimmed.
 
-**Tests.** `uv run --with pytest-cov pytest -q --cov=sftlint` runs 149 offline tests in under a second and reports 99 % line coverage of `src/sftlint` (1,235 statements, 15 missed; no module below 96 %).
+**Tests.** `uv run --with pytest-cov pytest -q --cov=sftlint` runs 188 offline tests in under a second and reports 99 % line coverage of `src/sftlint` (1,292 statements, 16 missed; no module below 97 %).
+
+**Sources.** The rules and formats above follow these public documents:
+
+- OpenAI Cookbook, "Data preparation and analysis for chat model fine-tuning": https://github.com/openai/openai-cookbook/blob/main/examples/Chat_finetuning_data_prep.ipynb
+- OpenAI API docs, function calling guide (parameters as JSON Schema, JSON-encoded arguments, call ids): https://developers.openai.com/api/docs/guides/function-calling
+- Hugging Face Transformers, chat templating guide: https://huggingface.co/docs/transformers/main/en/chat_templating
+- Hugging Face Transformers, tool use guide (`tool_calls` as dicts, `<tool_call>` output, tool call ids): https://huggingface.co/docs/transformers/main/en/chat_extras
+- Meta, Llama 3 model card and prompt formats: https://dev.meta.ai/llama/docs/model-cards-and-prompt-formats/meta-llama-3/
+- LLaMA-Factory data format (Alpaca and ShareGPT, `function_call` and `observation` tags): https://github.com/hiyouga/LLaMA-Factory/blob/main/data/README.md
+- JSON Schema Validation: A Vocabulary for Structural Validation of JSON (draft 2020-12): https://json-schema.org/draft/2020-12/json-schema-validation
+- A. Zou, Z. Wang, N. Carlini, M. Nasr, J. Z. Kolter, M. Fredrikson, "Universal and Transferable Adversarial Attacks on Aligned Language Models", 2023: https://arxiv.org/abs/2307.15043 (refusal prefix list in the authors' demo notebook: https://github.com/llm-attacks/llm-attacks/blob/main/demo.ipynb)
+- Unicode Standard Annex #24, Unicode Script Property: https://www.unicode.org/reports/tr24/
+- NIST/SEMATECH e-Handbook of Statistical Methods, 1.3.5.17 Detection of Outliers (modified z-score): https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm
+- Luhn algorithm: https://en.wikipedia.org/wiki/Luhn_algorithm
+- International Bank Account Number (check-digit validation, length by country): https://en.wikipedia.org/wiki/International_Bank_Account_Number
+- ISO/IEC 7812 (issuer identification numbers): https://en.wikipedia.org/wiki/ISO/IEC_7812
+- gitleaks, default secret-detection rules: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+- RFC 2606, Reserved Top Level DNS Names: https://www.rfc-editor.org/rfc/rfc2606
+- RFC 6761, Special-Use Domain Names: https://www.rfc-editor.org/rfc/rfc6761
 
 ## Results on public data
 
@@ -249,7 +277,7 @@ Not implemented:
 - Tool declarations in formats other than `{"type": "function", "function": {...}}` and flat `{"name", "parameters"}`. JSON Schema `$ref`, `format`, `patternProperties` and conditionals are ignored by `tool-args-schema`.
 - Tool results are not checked against any declared return schema, and the content of a result is not read beyond its id and function name.
 - Language identification. `language-mix` compares scripts, so English answered in French, or Hindi answered in Marathi, is not caught; a translation task whose answer is meant to be in another script is flagged.
-- A refusal classifier. `refusal` is a phrase match: a refusal worded differently is missed, and a quoted refusal inside a longer answer near the start is counted.
+- A refusal classifier. `refusal` is a phrase match: a refusal worded differently is missed, and a quoted refusal inside a longer answer near the start is counted. Partial refusals that go on to answer still count, for example "I cannot provide a definitive answer, but here are the main views." and "I can't write it for you, but here is an outline."
 - `--fix` acts on whole records or trailing turns only; it never edits text inside a turn, never repairs tool-call JSON, and does not re-lint its output. The dataset-level `refusal-rate` finding names no record, so `--fix` does nothing for it.
 - Near-duplicate detection and schema quarantine: see datasieve.
 
@@ -268,25 +296,6 @@ Known behaviour:
 - [prefpairs](https://github.com/vipul21435/prefpairs): store pairwise preference judgments and rank with Bradley-Terry and Elo.
 - [taskledger](https://github.com/vipul21435/taskledger): schema validation and lint rules for benchmark-task bundles.
 - [trajlens](https://github.com/vipul21435/trajlens): read coding-agent trajectories, measure per-run behaviour and classify failures.
-
-## References
-
-- OpenAI Cookbook, "Data preparation and analysis for chat model fine-tuning": https://github.com/openai/openai-cookbook/blob/main/examples/Chat_finetuning_data_prep.ipynb
-- OpenAI API docs, function calling guide (parameters as JSON Schema, JSON-encoded arguments, call ids): https://developers.openai.com/api/docs/guides/function-calling
-- Hugging Face Transformers, chat templating guide: https://huggingface.co/docs/transformers/main/en/chat_templating
-- Hugging Face Transformers, tool use guide (`tool_calls` as dicts, `<tool_call>` output, tool call ids): https://huggingface.co/docs/transformers/main/en/chat_extras
-- Meta, Llama 3 model card and prompt formats: https://dev.meta.ai/llama/docs/model-cards-and-prompt-formats/meta-llama-3/
-- LLaMA-Factory data format (Alpaca and ShareGPT, `function_call` and `observation` tags): https://github.com/hiyouga/LLaMA-Factory/blob/main/data/README.md
-- JSON Schema Validation: A Vocabulary for Structural Validation of JSON (draft 2020-12): https://json-schema.org/draft/2020-12/json-schema-validation
-- A. Zou, Z. Wang, N. Carlini, M. Nasr, J. Z. Kolter, M. Fredrikson, "Universal and Transferable Adversarial Attacks on Aligned Language Models", 2023: https://arxiv.org/abs/2307.15043 (refusal prefix list in the authors' demo notebook: https://github.com/llm-attacks/llm-attacks/blob/main/demo.ipynb)
-- Unicode Standard Annex #24, Unicode Script Property: https://www.unicode.org/reports/tr24/
-- NIST/SEMATECH e-Handbook of Statistical Methods, 1.3.5.17 Detection of Outliers (modified z-score): https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm
-- Luhn algorithm: https://en.wikipedia.org/wiki/Luhn_algorithm
-- International Bank Account Number (check-digit validation, length by country): https://en.wikipedia.org/wiki/International_Bank_Account_Number
-- ISO/IEC 7812 (issuer identification numbers): https://en.wikipedia.org/wiki/ISO/IEC_7812
-- gitleaks, default secret-detection rules: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
-- RFC 2606, Reserved Top Level DNS Names: https://www.rfc-editor.org/rfc/rfc2606
-- RFC 6761, Special-Use Domain Names: https://www.rfc-editor.org/rfc/rfc6761
 
 ## Licence
 
