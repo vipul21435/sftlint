@@ -11,9 +11,10 @@ Each rule has one fix action:
 * ``drop`` (every other rule): drop each record with a finding of that rule.
 
 Only findings of the rules passed in ``rules`` are acted on; other findings are left
-alone, and records without a selected finding are written back unchanged (blank lines are
-skipped). The
-fixed file is not re-linted: run ``sftlint check`` on it again.
+alone, and records without a selected finding are written back unchanged, line ending
+included (blank lines are skipped). A trimmed record keeps the ending of its line, and
+a last line with no ending gets the ending of the line before it. The fixed file is
+not re-linted: run ``sftlint check`` on it again.
 """
 
 from __future__ import annotations
@@ -103,7 +104,11 @@ def apply_fixes(
     out_dir = os.path.dirname(os.path.abspath(out))
     fd, tmp = tempfile.mkstemp(prefix=".sftlint-", suffix=".tmp", dir=out_dir)
     try:
-        with open(path, encoding="utf-8-sig") as src, open(fd, "w", encoding="utf-8") as dst:
+        # newline="" splits lines as the loader does but keeps each line's own ending.
+        with (
+            open(path, encoding="utf-8-sig", newline="") as src,
+            open(fd, "w", encoding="utf-8", newline="") as dst,
+        ):
             _copy_fixed(src, dst, by_line, convs, result)
         umask = os.umask(0)
         os.umask(umask)
@@ -122,12 +127,16 @@ def _copy_fixed(
     convs: dict[int, Conversation],
     result: FixResult,
 ) -> None:
+    eol = "\n"  # the line ending of the last line that had one; used for rewritten lines
     for lineno, text in enumerate(src, start=1):
+        body = text.rstrip("\r\n")
+        if len(body) < len(text):
+            eol = text[len(body) :]
         if not text.strip():
             continue
         hits = by_line.get(lineno)
         if not hits:
-            dst.write(text if text.endswith("\n") else text + "\n")
+            dst.write(text if len(body) < len(text) else text + eol)
             result.written += 1
             continue
         drops = sorted({f.rule for f in hits if fix_action(f.rule) == "drop"})
@@ -142,7 +151,7 @@ def _copy_fixed(
         first_cut = conv.messages[cut].source_index if cut < len(conv.messages) else None
         if first_cut is not None:
             record[conv.turns_key] = record[conv.turns_key][:first_cut]
-        dst.write(json.dumps(record, ensure_ascii=False) + "\n")
+        dst.write(json.dumps(record, ensure_ascii=False) + eol)
         result.written += 1
         result.records_trimmed += 1
         result.trimmed.update(rule_ids)

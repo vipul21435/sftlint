@@ -161,3 +161,28 @@ def test_blank_line_between_records_does_not_stop_the_copy(write_jsonl, tmp_path
     rows = [json.dumps(good), "", "   ", json.dumps(bad), json.dumps(good)]
     result, lines = run_fix(write_jsonl, tmp_path, rows, ["final-role"])
     assert len(lines) == 3 and result.written == 3 and result.records_trimmed == 1
+
+
+def test_fix_keeps_crlf_line_endings(tmp_path):
+    good = json.dumps({"messages": [m("user", "q"), m("assistant", "a.")]})
+    trim = json.dumps({"messages": [m("user", "q"), m("assistant", "a."), m("user", "more")]})
+    path = tmp_path / "crlf.jsonl"
+    path.write_bytes(("\r\n".join([good, trim, good, good]) + "\r\n").encode())
+    data = load(path)
+    report = lint(data, str(path))
+    out = tmp_path / "fixed.jsonl"
+    result = apply_fixes(path, data, report.findings, ["final-role", "tool-args-schema"], str(out))
+    raw = out.read_bytes()
+    assert result.written == 4 and result.records_trimmed == 1
+    assert raw.count(b"\r\n") == 4 and raw.count(b"\n") == 4
+    assert raw.split(b"\r\n")[0] == good.encode()
+
+
+def test_fix_adds_the_files_line_ending_to_an_unterminated_last_line(tmp_path):
+    good = json.dumps({"messages": [m("user", "q"), m("assistant", "a.")]})
+    path = tmp_path / "crlf.jsonl"
+    path.write_bytes(f"{good}\r\n{good}".encode())
+    data = load(path)
+    out = tmp_path / "fixed.jsonl"
+    apply_fixes(path, data, lint(data, str(path)).findings, ["final-role"], str(out))
+    assert out.read_bytes() == f"{good}\r\n{good}\r\n".encode()
