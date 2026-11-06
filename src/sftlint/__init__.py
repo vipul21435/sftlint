@@ -1,5 +1,6 @@
 """Lint chat, SFT and tool-calling datasets."""
 
+from sftlint import dataset_rules, pii  # noqa: F401  (import registers their rules)
 from sftlint.formats import Conversation, Message, detect_format, normalize
 
 __all__ = ["Conversation", "Message", "detect_format", "normalize"]
