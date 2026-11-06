@@ -2,9 +2,11 @@
 
 The default, ``pretokens``, needs no download: it counts the pieces of the GPT-2
 pre-tokenization pattern (a word with its leading space, a run of digits, a run of
-punctuation, a run of whitespace), written with the standard ``re`` module. A BPE
-tokenizer splits text at least that finely and often more, so a pretoken count is a
-lower bound on a real token count, not an estimate of it.
+punctuation, a run of whitespace), written with the standard ``re`` module. GPT-2's
+BPE never merges across these pieces, so for that tokenizer a pretoken count is a
+lower bound. Other vocabularies pre-tokenize differently (cl100k_base, for one, splits
+digits into groups of three and attaches a leading punctuation mark to a word), so for
+them it is an approximation; the README gives a measured comparison.
 
 ``tiktoken:<encoding>`` (for example ``tiktoken:cl100k_base``) counts real BPE tokens
 when the optional ``tiktoken`` package is installed; the encoding file is downloaded
