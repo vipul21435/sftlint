@@ -253,3 +253,12 @@ def test_tool_turn_after_an_assistant_turn_without_calls():
     assert [(f.turn, f.message) for f in out] == [
         (2, "tool turn does not follow an assistant tool call")
     ]
+
+
+def test_trailing_and_is_truncated():
+    assert truncation_reason("Add the salt and") == "ends with the word 'and'"
+
+
+def test_duplicate_turn_after_an_empty_turn():
+    c = conv(("user", ""), ("assistant", "x"), ("user", "q"), ("assistant", "y"), ("user", "q"))
+    assert [f.turn for f in run("duplicate-turn", c)] == [4]

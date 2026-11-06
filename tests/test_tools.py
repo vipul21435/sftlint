@@ -277,3 +277,36 @@ def test_pending_call_after_a_final_tool_turn():
     ]
     ends_on_call = conv(U, asst(call("1", "weather", "{}"), call("2", "clock", "{}")))
     assert check_tool_result_match(ends_on_call) == []
+
+
+def test_unreadable_call_does_not_hide_a_later_unknown_one():
+    c = normalize(
+        {
+            "conversations": [
+                {"from": "human", "value": "q"},
+                {
+                    "from": "gpt",
+                    "value": '<tool_call>{bad</tool_call><tool_call>{"name": "nope"}</tool_call>',
+                },
+            ],
+            "tools": TOOLS,
+        }
+    )
+    assert [f.message for f in check_tool_unknown(c)] == ["'nope' is not a declared tool"]
+
+
+def test_unreadable_result_does_not_hide_a_later_unmatched_one():
+    rec = {
+        "conversations": [
+            {"from": "human", "value": "q"},
+            {"from": "gpt", "value": '<tool_call>{"name": "weather", "arguments": {}}</tool_call>'},
+            {
+                "from": "tool",
+                "value": "<tool_response>oops</tool_response>"
+                '<tool_response>{"name": "clock", "content": {}}</tool_response>',
+            },
+            {"from": "gpt", "value": "done"},
+        ]
+    }
+    msgs = [f.message for f in check_tool_result_match(normalize(rec))]
+    assert msgs[1:] == ["result 'clock' answers no pending call", "call 'weather' gets no result"]
