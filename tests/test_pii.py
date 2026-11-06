@@ -257,3 +257,22 @@ def test_random_values_with_dots_are_still_secrets():
     jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5NXgL0n3I9P"
     assert find_secrets(f"token = {jwt}")
     assert find_secrets("secret = Zk3qP9vLm2Xw8RtY5nBc7HdJ")
+
+
+def test_pattern_misfires():
+    assert find_cards("2 7 1 8 2 8 1 8 2 8 4 5 9 0 4 5") == []
+    assert find_cards("4111 1111 1111 1111") == ["4111 1111 1111 1111"]
+    assert find_cards("3782 822463 10005") == ["3782 822463 10005"]
+    assert find_cards("4111-1111-1111-1111") == ["4111-1111-1111-1111"]
+    assert find_emails("git clone git@github.com:org/repo.git") == []
+    assert find_emails("write to ada.lovelace@uni.edu.au today") == ["ada.lovelace@uni.edu.au"]
+    doc_key = "AKIA" + "IOSFODNN7" + "EXAMPLE"  # built here so the file holds no key shape
+    assert find_secrets(f"aws_access_key_id = {doc_key}") == []
+
+
+def test_find_emails_is_linear_on_dotted_runs():
+    import time
+
+    start = time.perf_counter()
+    assert find_emails("a." * 50000) == []
+    assert time.perf_counter() - start < 1.0

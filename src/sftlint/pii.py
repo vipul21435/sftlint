@@ -5,7 +5,8 @@
   ``.test``, ``.invalid``, ``localhost`` ...). Examples in instruction data mostly use
   those, and they are not personal data. Placeholder local parts (``your-email@``,
   ``recipient@``) are skipped for the same reason.
-* ``pii-card``: 13 to 19 digits, optionally grouped by single spaces or hyphens, that
+* ``pii-card``: 13 to 19 digits, solid or grouped by single spaces or hyphens into
+  fours (or the 4-6-5 and 4-6-4 layouts), that
   start with a digit from 2 to 6 (the card-network industry identifiers), pass the
   Luhn checksum, and do not consist of one repeated digit. A digit run that touches
   a letter, digit, underscore or hyphen is skipped as part of an identifier.
@@ -38,7 +39,11 @@ from sftlint.formats import Conversation
 from sftlint.rules import rule
 from sftlint.stats import turn_text
 
-_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")
+# The look-behind starts a match only at the start of a run of local-part characters,
+# which keeps the scan linear on long dotted runs with no "@".
+_EMAIL = re.compile(
+    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b"
+)
 _RESERVED_DOMAINS = ("example.com", "example.org", "example.net", "example.edu")
 _RESERVED_TLDS = (".test", ".example", ".invalid", ".localhost", ".local")
 
@@ -128,15 +133,29 @@ _PLACEHOLDER_LOCAL = re.compile(
 )
 
 
+_SSH_REMOTE = re.compile(r":[\w~./-]")
+
+
 def find_emails(text: str) -> list[str]:
     """Addresses outside reserved domains whose local part is not a placeholder
     word such as ``your-email`` or ``recipient``."""
     out = []
     for m in _EMAIL.finditer(text):
         local = m.group(0).split("@", 1)[0]
+        if _SSH_REMOTE.match(text, m.end()):
+            continue  # git@github.com:org/repo.git is an SSH remote, not an address
         if not _reserved(m.group(1)) and not _PLACEHOLDER_LOCAL.search(local):
             out.append(m.group(0))
     return out
+
+
+def _card_grouping(raw: str) -> bool:
+    """Solid digits, groups of four (the last may be shorter), or the 4-6-5 / 4-6-4
+    layouts of 15- and 14-digit cards. Rules out single digits written with spaces."""
+    lens = [len(g) for g in re.split(r"[ -]", raw)]
+    if len(lens) == 1:
+        return True
+    return lens in ([4, 6, 5], [4, 6, 4]) or (all(n == 4 for n in lens[:-1]) and 1 <= lens[-1] <= 4)
 
 
 def find_cards(text: str) -> list[str]:
@@ -145,6 +164,8 @@ def find_cards(text: str) -> list[str]:
     for m in _CARD.finditer(text):
         raw = m.group(0)
         if re.search(r"[ -]{2}", raw) or (" " in raw and "-" in raw):
+            continue
+        if not _card_grouping(raw):
             continue
         digits = re.sub(r"\D", "", raw)
         if (
@@ -175,7 +196,12 @@ def find_ibans(text: str) -> list[str]:
 
 def find_secrets(text: str, min_entropy: float = 3.5) -> list[tuple[str, str]]:
     """Return ``(description, matched value)`` for each secret-like string found."""
-    out = [(label, m.group(0)) for label, rx in _PREFIXED_SECRETS for m in rx.finditer(text)]
+    out = [
+        (label, m.group(0))
+        for label, rx in _PREFIXED_SECRETS
+        for m in rx.finditer(text)
+        if not _PLACEHOLDER.search(m.group(0))  # documentation keys such as ...EXAMPLE
+    ]
     for m in _ASSIGNED_SECRET.finditer(text):
         name, value = m.group(1), m.group(2)
         if _NAME_VALUE.fullmatch(value):
