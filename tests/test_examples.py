@@ -9,13 +9,19 @@ EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 def test_sample_counts():
     report = lint(load(EXAMPLES / "sample.jsonl"))
-    assert report.records == 9
+    assert report.records == 13
     assert report.counts() == {
         "duplicate-prompt": 1,
         "empty-turn": 1,
         "final-role": 1,
+        "language-mix": 1,
+        "refusal": 1,
         "role-order": 1,
         "system-position": 1,
+        "tool-args-json": 1,
+        "tool-args-schema": 1,
+        "tool-result-match": 2,
+        "tool-unknown": 1,
         "truncated-final": 2,
     }
 
