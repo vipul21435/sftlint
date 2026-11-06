@@ -296,6 +296,7 @@ Known behaviour:
 - [prefpairs](https://github.com/vipul21435/prefpairs): store pairwise preference judgments and rank with Bradley-Terry and Elo.
 - [taskledger](https://github.com/vipul21435/taskledger): schema validation and lint rules for benchmark-task bundles.
 - [trajlens](https://github.com/vipul21435/trajlens): read coding-agent trajectories, measure per-run behaviour and classify failures.
+- [contamscan](https://github.com/vipul21435/contamscan): measure how much of an evaluation set appears in a training corpus, with published n-gram overlap methods; a check to run on an SFT set before training, which sftlint does not do.
 
 ## Licence
 
