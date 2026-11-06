@@ -115,7 +115,7 @@ Tool calls are read from an OpenAI-style `tool_calls` list (arguments as a JSON 
 | `empty-turn` | error | a system, user or assistant turn with no text and no tool calls (an empty tool result, as from a function that returns nothing, is not flagged, nor is a turn whose content list holds an image or other non-text part) | trains on an empty target, or an empty context |
 | `duplicate-turn` | warning | a turn that repeats an earlier turn of the same role verbatim (whitespace collapsed) | often a copy error in multi-turn synthesis |
 | `final-role` | warning | a last turn that is not assistant | the record has no target to learn from; the OpenAI data-prep notebook checks that every conversation has an assistant message |
-| `truncated-final` | warning | a final assistant turn with an unclosed code fence (fence lines are paired as CommonMark pairs them: a line of at least as many backticks closes a block), a last character that cannot end a sentence (`, ; : ( [ {` and operators), a last word from a short list of articles, conjunctions, prepositions, copulas and relative words (a, an, the, and, or, but, of, to, in, on, for, with, by, from, as, at, is, are, was, were, that, which, because, if, then, than; so an unpunctuated "I am not sure what it is" is flagged; a lone capital `A`, as in "The answer is A", is an answer label and does not count), or (rendered text) no end-of-turn token | the usual trace of a generation that hit its token limit |
+| `truncated-final` | warning | a final assistant turn with an unclosed code fence (fence lines are paired as CommonMark pairs them: a line of at least as many backticks closes a block; a line that ends in a run of three or more backticks after other text also opens or closes one), a last character that cannot end a sentence (`, ; : ( [ {` and operators), a last word from a short list of articles, conjunctions, prepositions, copulas and relative words (a, an, the, and, or, but, of, to, in, on, for, with, by, from, as, at, is, are, was, were, that, which, because, if, then, than; so an unpunctuated "I am not sure what it is" is flagged; a lone capital `A`, as in "The answer is A", is an answer label and does not count), or (rendered text) no end-of-turn token | the usual trace of a generation that hit its token limit |
 | `refusal` | info | a final answer whose first 300 characters contain a refusal phrase at a sentence start | a refusal rate far from what the set intends skews a model towards over- or under-refusing; the report gives the rate |
 | `refusal-rate` | error | the share of answers that open with a refusal phrase, when it is above `--max-refusal-rate` (off unless the flag is given) | a CI gate for the rate itself; one dataset-level finding, reported at line 0 |
 | `language-mix` | info | a final answer whose dominant script differs from the last user turn's | a question answered in another language is usually a generation or translation fault |
@@ -149,7 +149,7 @@ A record is flagged when `|M_i| > 3.5` (the cut-off the NIST handbook quotes fro
 
 Matches are masked in reports (first and last two characters kept), and each distinct matched value is reported once per conversation, so two different tokens of the same kind give two findings. A card number is compared by its digits, so the same number written with spaces and with hyphens counts once; IBANs are compared without their spaces.
 
-**Tool calls.** `tool-args-schema` uses a small JSON Schema validator in `sftlint/schema.py` with no dependency. It implements the keywords tool declarations use in practice: `type`, `enum`, `const`, `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `anyOf`, `oneOf`, `allOf` and `nullable`. As in the JSON Schema validation vocabulary, `integer` matches any number with a zero fractional part, booleans are not numbers, and `enum` and `const` compare by JSON type and value (`true` does not match `1`; `1` matches `1.0`). Other keywords (`$ref`, `format`, conditionals) are ignored, so the validator can miss errors but does not invent them. A property test draws 2,000 random JSON values and checks that each validates against its own type, an `enum` that contains it, and an `anyOf` that includes its type.
+**Tool calls.** `tool-args-schema` uses a small JSON Schema validator in `sftlint/schema.py` with no dependency. It implements the keywords tool declarations use in practice: `type`, `enum`, `const`, `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `anyOf`, `oneOf`, `allOf` and `nullable`. As in the JSON Schema validation vocabulary, `integer` matches any number with a zero fractional part, booleans are not numbers, and `enum` and `const` compare by JSON type and value (`true` does not match `1`; `1` matches `1.0`). Other keywords (`$ref`, `format`, `not`, conditionals) are ignored, so the validator can miss errors but does not invent them: inside `oneOf`, where an ignored keyword could let a second branch match, "matches more than one" is reported only when every branch uses supported keywords alone (a glaive schema below, whose `oneOf` branches use `not`, showed the case). A property test draws 2,000 random JSON values and checks that each validates against its own type, an `enum` that contains it, and an `anyOf` that includes its type.
 
 `tool-result-match` walks each assistant turn with calls and the run of tool turns after it. Each result removes the pending call it answers. Calls still pending are reported only if the conversation continues past the call turn: in single-turn function-calling data the call itself is the training target and no result is expected.
 
@@ -161,7 +161,7 @@ Matches are masked in reports (first and last two characters kept), and each dis
 
 **Fix.** `--fix OUT --fix-rules a,b` writes a copy of the input. Records without a finding of a named rule are copied unchanged, line ending included (blank lines are not copied). `final-role` and `empty-turn` trim: `final-role` cuts the turns after the last assistant turn, `empty-turn` cuts trailing empty turns. A trim that would leave a record not ending in a non-empty assistant turn, or a record with no turn list (Alpaca, prompt/completion, rendered text), drops the record instead. Every other rule drops the records it flags. The copy is written to a temporary file next to `OUT` and moved into place when complete, so `OUT` may be the input file itself. The copy is not re-linted; run `sftlint check` on it again. The summary line counts each record under every named rule it has a finding of, so the per-rule counts overlap and can add up to more than the records dropped or trimmed.
 
-**Tests.** `uv run --with pytest-cov pytest -q --cov=sftlint` runs 234 offline tests in under two seconds and reports 99 % line coverage of `src/sftlint` (1,338 statements, 11 missed; no module below 98 %).
+**Tests.** `uv run --with pytest-cov pytest -q --cov=sftlint` runs 248 offline tests in under two seconds and reports 99 % line coverage of `src/sftlint` (1,361 statements, 11 missed; no module below 98 %).
 
 **Sources.** The rules and formats above follow these public documents:
 
@@ -269,12 +269,72 @@ An earlier version of `truncated-final` also flagged a Telugu answer key ending 
 
 **Time.** With JSON and Markdown reports written, three runs of `/usr/bin/time -p uv run sftlint check data/<file>.jsonl --json ... --markdown ...` took 4.28 to 4.44 s of wall time for the smoltalk slice (14 MB), 3.46 to 3.82 s for the single-turn Hermes file (17 MB) and 4.24 to 4.65 s for the multi-turn one (20 MB), on an arm64 laptop, including `uv run` start-up.
 
+### Two datasets the rules were not tuned on
+
+The rules above were written and adjusted while reading the four files above. Two more files, of other shapes, were run afterwards: a multi-turn chat set and a tool-calling set with its own call layout. Both slices are fetched by the same script (about 17 MB together):
+
+```
+uv run python scripts/fetch_data.py --out data --rows 2000 --only ultrachat,glaive
+uv run sftlint check data/ultrachat-sft.jsonl --json data/ultrachat-sft.report.json --markdown data/ultrachat-sft.report.md
+uv run sftlint check data/glaive-fc-v2.jsonl --json data/glaive-fc-v2.report.json --markdown data/glaive-fc-v2.report.md
+uv run sftlint check data/<file>.jsonl --fail-on never --max-examples 100000 --json data/<file>.all.json
+```
+
+The last command lists every finding (reports list 20 by default); the examples below were read from it. Line numbers are lines of the fetched JSONL, so line N is row N-1 of the split.
+
+| rule | ultrachat_200k slice | glaive-function-calling-v2 slice |
+|---|---:|---:|
+| records | 2,000 | 2,000 |
+| records with findings | 90 | 593 |
+| `refusal` | 4 | 456 |
+| `role-order` | 0 | 151 |
+| `final-role` | 0 | 40 |
+| `duplicate-prompt` | 0 | 39 |
+| `tool-args-schema` | 0 | 19 |
+| `tool-args-json` | 0 | 1 |
+| `tool-unknown` | 0 | 1 |
+| `truncated-final` | 6 | 9 |
+| `pii-email` | 20 | 30 |
+| `length-outlier` | 64 | 40 |
+| every other rule | 0 | 0 |
+| exit code | 0 | 1 |
+| wall time, three runs | 5.42 to 5.48 s (11.9 MB) | 1.93 to 2.06 s (4.7 MB) |
+
+Wall times are from `/usr/bin/time -p` on the first two `sftlint check` commands above, on the same arm64 laptop, including `uv run` start-up.
+
+#### ultrachat_200k
+
+**ultrachat_200k, `train_sft` split, first 2,000 rows** ([dataset card](https://huggingface.co/datasets/HuggingFaceH4/ultrachat_200k), MIT licence as stated on the card). Multi-turn conversations between a user and an assistant, with a median of 6 turns (4 to 14) and no system turn. Format detected: `messages`. All 2,000 answers are in Latin script. The median prompt is 3,828.5 characters and the median response 1,306.5.
+
+- `truncated-final`, 6. Line 1773 ends `Table 6 shows that` after a table; line 168, a story, ends `he muttered,`; lines 25, 216, 728 and 1427 stop inside a code block (line 25 in a config file at `ssl_client_key = "/etc/ssl`). All six are cut off.
+- `refusal`, 4. Line 1666 opens "I am unable to provide a template for a performance appraisal" and declines the task; lines 772 and 1137 open "I'm sorry but there is no information" (and "I am sorry, but there are no specific culinary schools mentioned in the text"), which say that the passage in the prompt does not hold the answer; line 1535 turns down a request as impractical. Only the first is a refusal of the kind the rate is meant to measure.
+- `pii-email`, 20 in 19 records: 8 in the first user turn and 12 in later turns; 7 have the local part `info`. The rule cannot tell an organisation's contact address from a person's.
+- `length-outlier`, 64, by the modified z-score on log length described above.
+
+This run showed a false positive in `truncated-final`, fixed before the counts above: the first run gave 8 findings, and two (lines 398 and 1632) were complete answers that write a code fence after text on the same line, one closing a block with `` end. ``` `` and one opening a block with `` works. ``` ``, then end with a sentence after the block. Read by CommonMark rules, the first block never closes and the second answer's closing fence opens a new one. The rule now reads a run of three or more backticks at the end of a line as a fence; the regression tests in `tests/test_rules.py` are hand-written answers of both shapes, and the four files above give the same counts after the change.
+
+#### glaive-function-calling-v2
+
+**glaive-function-calling-v2, train split, first 2,000 rows** ([dataset card](https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2), Apache 2.0 as stated on the card; not gated). Each row is a system string that lists the functions as JSON objects and a chat string of `USER:`, `ASSISTANT:` and `FUNCTION RESPONSE:` turns, with a call written `<functioncall> {"name": ..., "arguments": '<JSON string>'}`. sftlint does not read this layout, so `glaive_to_messages` in the fetch script rewrites each row as a `messages` record with a `tools` list (its docstring gives every assumption). 1,374 of the 2,000 records declare at least one function (1,622 in all) and 1,094 contain a call; the rewrite read 1,409 calls in the quoted layout and 46 whose body was plain JSON with an object as arguments. Format detected: `messages`.
+
+- `role-order`, 151. 148 are an assistant turn followed by a second assistant turn that holds the call (142 records), as in line 6: "Of course, I can help you with that. Let me calculate it for you." and then the call as its own turn, each ending in `<|endoftext|>` in the source. This is how the dataset lays out a preamble before a call; a template that requires alternating roles rejects it. The other 3 (lines 465, 749, 1081) are calls written as `AI to=calculate_bmi: {...}` inside the text instead of after `<functioncall>`, so the tool result that follows answers no call: the call layout is wrong in the data.
+- `tool-args-schema`, 19 findings in 13 records. 12 are `calculate_area` calls whose declaration cannot be met by a call for one shape: in 11 the `dimensions` object requires measurements no single shape has (line 248 requires `radius`, `side_length`, `base` and `height` together; line 1598 requires `radius` for every shape), and in 1 (line 688) it requires `length` and `width` while the call is for a circle. The other 7 do not match a declaration that is sound: line 1479 passes `from_currency` and `to_currency` (twice) where the declaration requires `from` and `to`, line 1311 passes `birthdate` for `date_of_birth`, line 647 passes `"year": ""` where an integer is declared, and lines 1004, 1010 and 1305 omit a required property.
+- `tool-unknown`, 1: line 46 calls `get_movie_details`, while the record declares only `search_movies` and `calculate_gpa`. `tool-args-json`, 1: line 1980 passes the arguments `[5, 10, 15, 20, 25]`, a list instead of an object.
+- `final-role`, 40: 26 conversations end on a user turn (line 196 ends "Thank you! These recipes sound delicious.") and 14 on a tool result; in line 31 the tool result itself stops after `{"lyrics": "The`. These are also the 40 `length-outlier` findings, all a response of 0 characters.
+- `refusal`, 456 of the 1,960 records with a final answer (23.3 %), all in records that declare functions. All open "I'm sorry, but" (454) or "I'm sorry but" (2), and 453 have a word such as capability, unable or cannot in their first 300 characters: the assistant says it cannot do something outside its functions, such as booking a flight. The dataset includes them on purpose; the report's rate is the number to compare with what a training mix intends.
+- `truncated-final`, 9: all real cut-offs, such as line 41 ending `By implementing these strategies,` and line 1893 ending `multiple layers of`, though each of these turns ends with `<|endoftext|>` in the source, so the end-of-text token was written after the text was cut.
+- `duplicate-prompt`, 39: the same system turn, tools and turns before the final answer as an earlier record, such as a request to generate a password; 21 of the 39 also repeat the final answer of the earlier record.
+- `pii-email`, 30 in 26 records: 21 are one address with the local part `boss` at a generic company domain, written by the generator into email-sending requests.
+
+The rewrite had one fault that this run showed: the source escapes an apostrophe inside the single-quoted arguments as `\'`, and the first version of the rewrite kept the backslash, which gave 4 `tool-args-json` findings (lines 608, 768, 909, 1701) that were artefacts of the rewrite, not of the data. The rewrite now reads `\'` as a quote, as in a Python string literal, and those 4 are gone. Separately, line 1598 declares a `oneOf` whose branches use `not`, which the schema validator ignores; it reported "matches 3 of oneOf" for a circle call. Under the full specification that verdict holds here (the branches constrain keys the object does not have), but in general an ignored keyword can let an extra branch match, so the validator now reports more than one match only when every branch is fully checked (tests in `tests/test_schema.py`). The 19 above are counted after both changes; the four files above give the same counts.
+
 ## Limitations
 
 Not implemented:
 
 - Inputs other than JSONL (no Parquet, no JSON arrays), and chat layouts other than the five above. Rendered template text is read for ChatML, Zephyr and Llama 3 only; Mistral and Llama 2 `[INST]` text is not parsed, and Phi-3 text (Zephyr role markers with `<|end|>` and no `</s>`) is reported as `format-mismatch` rather than read as Zephyr. The `template-text` reader is tested on fixtures only: no public rendered-text dataset with a licence stated on its card was run here.
-- Tool declarations in formats other than `{"type": "function", "function": {...}}` and flat `{"name", "parameters"}`. JSON Schema `$ref`, `format`, `patternProperties` and conditionals are ignored by `tool-args-schema`.
+- Tool declarations in formats other than `{"type": "function", "function": {...}}` and flat `{"name", "parameters"}`. JSON Schema `$ref`, `format`, `not`, `patternProperties` and conditionals are ignored by `tool-args-schema`.
+- The glaive layout (a `system` string with function JSON, a `chat` string of `USER:`, `ASSISTANT:` and `FUNCTION RESPONSE:` turns, calls after `<functioncall>`) is not read by sftlint; the glaive results below come from records the fetch script rewrites as `messages`, so they depend on that rewrite. A call written in another layout (`AI to=name: {...}` in three records) is left as text by the rewrite and shows up only as a `role-order` finding on the tool turn after it.
 - Tool results are not checked against any declared return schema, and the content of a result is not read beyond its id and function name.
 - Language identification. `language-mix` compares scripts, so English answered in French, or Hindi answered in Marathi, is not caught; a translation task whose answer is meant to be in another script is flagged.
 - A refusal classifier. `refusal` is a phrase match: a refusal worded differently is missed, and a quoted refusal inside a longer answer near the start is counted. Partial refusals that go on to answer still count, for example "I cannot provide a definitive answer, but here are the main views." and "I can't write it for you, but here is an outline."
@@ -283,11 +343,12 @@ Not implemented:
 
 Known behaviour:
 
-- `truncated-final` is a heuristic. A final Markdown table row (a last line that starts and ends with `|`), a last word ending in `++` and a final URL ending in `/` are treated as complete. Still flagged: an answer that legitimately ends with a colon, a semicolon-terminated list item, a formula ending in an operator, a pipe that does not close a table row, and a code block whose closing fence is not on a line of its own (for example ```` x = 1``` ````). A fence that does not start its line is not seen, so a block opened mid-line and left open is missed. An answer cut at a sentence boundary is not caught. Rerunning the four files above after the table, `++` and URL exceptions were added, and again after fences were paired by line, gave the same counts.
+- `truncated-final` is a heuristic. A final Markdown table row (a last line that starts and ends with `|`), a last word ending in `++` and a final URL ending in `/` are treated as complete. Still flagged: an answer that legitimately ends with a colon, a semicolon-terminated list item, a formula ending in an operator, a pipe that does not close a table row, and a code block whose closing fence has text after it on the same line (for example ```` x = 1``` done ````). A fence with text after it on its line is not seen, so a block opened in the middle of a line and left open is missed; a fence at the end of a line after other text (`` end. ``` `` or `` as follows: ``` ``) is read as opening or closing a block, which CommonMark does not do. An answer cut at a sentence boundary is not caught. Rerunning the four files above after the table, `++` and URL exceptions were added, again after fences were paired by line, and again after end-of-line fences were read, gave the same counts.
 - Turn numbers in findings count normalised turns, from 0. A top-level `system` field (ShareGPT, Alpaca) becomes turn 0, so in such a record `turn 3` is `conversations[2]`.
 - `duplicate-prompt` is exact. Prompts that differ by one character are not duplicates here.
+- `role-order` reports two assistant turns in a row even where a dataset writes them on purpose, as glaive does for a preamble followed by a call (148 of its 151 findings above); `--ignore role-order` or `--select` is the way to accept that layout.
 - `length-outlier` is relative to the file: in a file that is mostly broken, the broken records are the norm.
-- `pii-*` and `secret-key` are pattern matches with validation, not a PII classifier. Names, phone numbers and postal addresses are not detected. No IBAN occurs in the four files above, so `pii-iban` is tested on fixtures only.
+- `pii-*` and `secret-key` are pattern matches with validation, not a PII classifier. Names, phone numbers and postal addresses are not detected. No IBAN occurs in the six files above, so `pii-iban` is tested on fixtures only.
 - `pretokens` is close to a lower bound only for GPT-2's tokenizer; for others it is an approximation (measured above for cl100k_base).
 
 ## Related tools

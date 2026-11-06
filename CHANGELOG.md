@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Results on two more public datasets, run after the rules were written: a 2,000-row slice of ultrachat_200k (multi-turn chat, MIT) and a 2,000-row slice of glaive-function-calling-v2 (tool calls with declared functions, Apache 2.0), with per-rule counts, examples by line, wall times and commands in the README.
+- `scripts/fetch_data.py --only` to fetch a subset of the sources, and fetchers for the two new slices; the glaive rows are rewritten as `messages` records with a `tools` list by `glaive_to_messages`, which is tested.
+
+### Fixed
+
+- `truncated-final` reads a run of three or more backticks at the end of a line, after other text, as a fence that opens or closes a block; two complete ultrachat answers written that way were reported as unclosed code fences.
+- `tool-args-schema` reports "matches more than one of oneOf" only when every branch uses supported keywords, since an ignored keyword such as `not` can let an extra branch match.
+
 ## 0.1.0 - 2026-11-06
 
 ### Added
