@@ -19,11 +19,16 @@ fields the linter reads are kept; per-record ids are dropped.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
+from typing import TextIO
 
 ROWS_API = "https://datasets-server.huggingface.co/rows"
 HERMES_BASE = "https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1/resolve/main"
@@ -33,16 +38,50 @@ HERMES_FILES = {
 }
 
 
-def _get(url: str) -> bytes:
-    for attempt in range(4):
+ATTEMPTS = 7
+MAX_WAIT = 60.0
+
+
+def _retry_after(exc: urllib.error.HTTPError) -> float | None:
+    """Seconds from a numeric Retry-After header, or None."""
+    value = exc.headers.get("Retry-After") if exc.headers else None
+    try:
+        return max(0.0, float(value)) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _get(url: str, sleep=time.sleep) -> bytes:
+    """GET with retries. HTTP 429 (rate limited) waits for Retry-After when the server
+    sends one, else backs off 2, 4, 8 ... seconds up to a minute; other network errors
+    back off the same way. Client errors other than 429 are raised at once."""
+    for attempt in range(ATTEMPTS):
         try:
             with urllib.request.urlopen(url, timeout=60) as resp:
                 return resp.read()
-        except OSError:
-            if attempt == 3:
+        except urllib.error.HTTPError as exc:
+            if attempt == ATTEMPTS - 1 or (400 <= exc.code < 500 and exc.code != 429):
                 raise
-            time.sleep(2**attempt)
+            wait = _retry_after(exc) if exc.code == 429 else None
+            sleep(min(MAX_WAIT, wait if wait is not None else 2.0 ** (attempt + 1)))
+        except OSError:
+            if attempt == ATTEMPTS - 1:
+                raise
+            sleep(min(MAX_WAIT, 2.0 ** (attempt + 1)))
     raise RuntimeError("unreachable")
+
+
+@contextlib.contextmanager
+def _atomic_write(path: Path) -> Iterator[TextIO]:
+    """Write to ``path.part`` and rename it to ``path`` only once the block finishes,
+    so a failed download never leaves a partial file under the final name."""
+    tmp = path.with_name(path.name + ".part")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            yield fh
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _rows(dataset: str, config: str, split: str, rows: int):
@@ -66,7 +105,7 @@ def _rows(dataset: str, config: str, split: str, rows: int):
 
 def fetch_smoltalk(out: Path, rows: int) -> Path:
     path = out / "smoltalk-magpie-ultra.jsonl"
-    with open(path, "w", encoding="utf-8") as fh:
+    with _atomic_write(path) as fh:
         for row in _rows("HuggingFaceTB/smoltalk", "smol-magpie-ultra", "train", rows):
             fh.write(json.dumps({"messages": row["messages"]}, ensure_ascii=False))
             fh.write("\n")
@@ -76,7 +115,7 @@ def fetch_smoltalk(out: Path, rows: int) -> Path:
 def fetch_aya(out: Path, rows: int = 1750) -> Path:
     """The Aya test split as prompt/completion; the per-row annotator id is dropped."""
     path = out / "aya-test.jsonl"
-    with open(path, "w", encoding="utf-8") as fh:
+    with _atomic_write(path) as fh:
         for row in _rows("CohereLabs/aya_dataset", "default", "test", rows):
             rec = {"prompt": row["inputs"], "completion": row["targets"]}
             rec["language"] = row["language"]
@@ -88,7 +127,7 @@ def fetch_aya(out: Path, rows: int = 1750) -> Path:
 def fetch_hermes(out: Path, source: str) -> Path:
     path = out / HERMES_FILES[source]
     records = json.loads(_get(f"{HERMES_BASE}/{source}"))
-    with open(path, "w", encoding="utf-8") as fh:
+    with _atomic_write(path) as fh:
         for rec in records:
             row = {"conversations": rec["conversations"], "tools": rec.get("tools")}
             fh.write(json.dumps(row, ensure_ascii=False))
