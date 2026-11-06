@@ -7,6 +7,6 @@ htmlcov/
 dist/
 *.egg-info/
 .ruff_cache/
-data/
+/data
 downloads/
 *.download
