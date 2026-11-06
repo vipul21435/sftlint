@@ -204,8 +204,9 @@ def truncation_reason(text: str) -> str | None:
     Signals, each cheap and conservative: a code fence left open (see
     ``unclosed_fence``); a final character that cannot end a sentence
     (comma, colon, open bracket, operator) unless the ending is a known complete
-    form (see ``_closed_ending``); or a final word that is an article, conjunction
-    or preposition (a single capital ``A``, an answer label, does not count).
+    form (see ``_closed_ending``); or a final word in ``_DANGLING_WORDS`` (articles,
+    conjunctions, prepositions, copulas and relative words; a single capital ``A``, an
+    answer label, does not count).
     """
     stripped = text.rstrip()
     if not stripped:

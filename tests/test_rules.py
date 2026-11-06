@@ -262,3 +262,7 @@ def test_trailing_and_is_truncated():
 def test_duplicate_turn_after_an_empty_turn():
     c = conv(("user", ""), ("assistant", "x"), ("user", "q"), ("assistant", "y"), ("user", "q"))
     assert [f.turn for f in run("duplicate-turn", c)] == [4]
+
+
+def test_trailing_copula_is_truncated():
+    assert truncation_reason("I am not sure what it is") == "ends with the word 'is'"
