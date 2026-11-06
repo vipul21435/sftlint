@@ -129,7 +129,7 @@ PII, secret and tool rules also read tool-call arguments, not only the text of e
 M_i = 0.6745 (x_i - median(x)) / MAD,    MAD = median(|x_i - median(x)|)
 ```
 
-A record is flagged when `|M_i| > 3.5` (the cut-off the NIST handbook quotes from Iglewicz and Hoaglin; change it with `--outlier-z`). The log makes the score symmetric for right-skewed lengths, and the median and MAD stop a few huge records from masking each other the way a mean and standard deviation would. The rule is skipped below 20 records. A test draws 20,000 standard normal values and checks that fewer than 0.2 % score above 3.5.
+A record is flagged when `|M_i| > 3.5` (the cut-off the NIST handbook quotes from Iglewicz and Hoaglin; change it with `--outlier-z`). The log makes the score symmetric for right-skewed lengths, and the median and MAD stop a few huge records from masking each other the way a mean and standard deviation would. When more than half the values of a field have the same length, MAD is 0; the score then uses the mean absolute deviation from the median instead, `M_i = (x_i - median(x)) / (1.253314 MeanAD)`, where 1.253314 = sqrt(pi/2) is the ratio of the standard deviation to the mean absolute deviation for normal data (as 1/0.6745 is for the MAD). In a label-style file where almost every answer has one length, a record of a different length can then score high, so a field with a few distinct lengths may show `length-outlier` findings that are only a different label. The rule is skipped below 20 records. A test draws 20,000 standard normal values and checks that fewer than 0.2 % score above 3.5.
 
 **PII and secrets.** Each pattern has a validation step:
 

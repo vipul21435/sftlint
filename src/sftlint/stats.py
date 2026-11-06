@@ -10,7 +10,8 @@ Outliers use the modified z-score of Iglewicz and Hoaglin on ``log1p(length)``::
 
     M_i = 0.6745 * (x_i - median(x)) / MAD,   MAD = median(|x_i - median(x)|)
 
-and a record is an outlier when ``|M_i|`` exceeds a threshold (3.5 by default). The
+and a record is an outlier when ``|M_i|`` exceeds a threshold (3.5 by default). When
+MAD is 0 the scale falls back to the mean absolute deviation (see :func:`modified_z`). The
 log makes the score symmetric for lengths, which are right-skewed; the median and MAD
 keep a handful of huge records from hiding each other the way a mean and standard
 deviation would.
@@ -76,14 +77,25 @@ def summary(values: Sequence[float]) -> dict[str, float]:
 
 
 def modified_z(values: Sequence[float]) -> list[float]:
-    """Iglewicz-Hoaglin modified z-scores. All zeros when MAD is zero."""
+    """Iglewicz-Hoaglin modified z-scores.
+
+    When more than half the values are equal, MAD is 0 and the score is undefined;
+    the scale then falls back to the mean absolute deviation from the median,
+    ``M_i = (x_i - median) / (1.253314 * MeanAD)`` (for normal data ``sigma`` is
+    ``sqrt(pi / 2) = 1.253314`` times the mean absolute deviation, as it is
+    ``1 / 0.6745`` times the MAD). All zeros when every value is the same.
+    """
     if not values:
         return []
     med = quantile(sorted(values), 0.5)
-    mad = quantile(sorted(abs(v - med) for v in values), 0.5)
-    if mad == 0:
+    dev = [abs(v - med) for v in values]
+    mad = quantile(sorted(dev), 0.5)
+    if mad > 0:
+        return [0.6745 * (v - med) / mad for v in values]
+    mean_ad = sum(dev) / len(dev)
+    if mean_ad == 0:
         return [0.0] * len(values)
-    return [0.6745 * (v - med) / mad for v in values]
+    return [(v - med) / (1.253314 * mean_ad) for v in values]
 
 
 def length_table(

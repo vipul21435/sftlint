@@ -78,7 +78,7 @@ def test_prompt_key_includes_roles():
     assert prompt_key(a) != prompt_key(b)
 
 
-@pytest.mark.parametrize("n", [5, 19])
+@pytest.mark.parametrize("n", [5, 18])
 def test_length_outlier_skips_small_sets(n):
     convs = [pc("p" * 10, "r", i) for i in range(n)] + [pc("p" * 10000, "r", 99)]
     assert check_length_outlier(convs) == []
@@ -193,3 +193,18 @@ def test_duplicate_prompt_sees_declared_tools_and_call_arguments():
     ]
     out = check_duplicate_prompt(convs)
     assert [(f.line, f.message) for f in out] == [(5, "same prompt as line 4")]
+
+
+def test_modified_z_falls_back_to_mean_absolute_deviation_when_mad_is_zero():
+    xs = [2.0] * 30 + [12.0]
+    z = modified_z(xs)
+    assert z[:30] == [0.0] * 30
+    mean_ad = 10.0 / 31
+    assert z[30] == pytest.approx(10.0 / (1.253314 * mean_ad))
+
+
+def test_length_outlier_found_when_most_lengths_are_equal():
+    convs = [pc(f"Review {i}: fine product.", "positive", i + 1) for i in range(30)]
+    convs.append(pc("Review 30: fine product.", "positive " * 20000, 31))
+    out = check_length_outlier(convs)
+    assert [(f.line, f.message.split(":")[0]) for f in out] == [(31, "response is long")]
