@@ -72,6 +72,17 @@ def to_markdown(report: Report, max_examples: int = 20) -> str:
                 if s.get("count"):
                     cells = " | ".join(_fmt_num(s[k]) for k in ("mean", "p50", "p90", "p99", "max"))
                     lines.append(f"| {name} | {unit} | {cells} |")
+    content = report.stats.get("content")
+    if content and content["answered"]:
+        scripts = ", ".join(f"{k} {v}" for k, v in content["answer_scripts"].items())
+        lines += [
+            "",
+            "## Answers",
+            "",
+            f"- refusal rate: {content['refusals']} of {content['answered']} "
+            f"({100 * content['refusal_rate']:.1f} %)",
+            f"- dominant script of answers: {scripts}",
+        ]
     if report.findings:
         lines += ["", f"## First {min(max_examples, len(report.findings))} findings", ""]
         for f in report.findings[:max_examples]:

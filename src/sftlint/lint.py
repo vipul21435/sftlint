@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
+from sftlint.content import content_stats
 from sftlint.dataset_rules import check_duplicate_prompt, check_length_outlier
 from sftlint.findings import Finding, severity_rank
 from sftlint.loader import Dataset
@@ -73,10 +74,13 @@ def lint(
     if "length-outlier" in rules:
         findings.extend(check_length_outlier(data.conversations, threshold=outlier_z))
     findings.sort(key=lambda f: (f.line, -1 if f.turn is None else f.turn, f.rule))
+    stats: dict[str, Any] = {"tokenizer": tokenizer}
+    stats["lengths"] = length_stats(data.conversations, count_tokens)
+    stats["content"] = content_stats(data.conversations)
     return Report(
         path=path,
         fmt=data.fmt,
         records=data.records,
         findings=findings,
-        stats={"tokenizer": tokenizer, "lengths": length_stats(data.conversations, count_tokens)},
+        stats=stats,
     )
