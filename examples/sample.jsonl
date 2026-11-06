@@ -1,0 +1,9 @@
+{"messages": [{"role": "system", "content": "You are a concise assistant."}, {"role": "user", "content": "What is the capital of France?"}, {"role": "assistant", "content": "Paris."}]}
+{"messages": [{"role": "user", "content": "What is the capital of France?"}, {"role": "assistant", "content": "The capital of France is Paris."}]}
+{"messages": [{"role": "user", "content": "Write a function that adds two numbers."}, {"role": "assistant", "content": "```python\ndef add(a, b):\n    return a + b"}]}
+{"messages": [{"role": "user", "content": "Name three primary colours."}, {"role": "system", "content": "Answer in one line."}, {"role": "assistant", "content": "Red, yellow and blue."}]}
+{"messages": [{"role": "user", "content": "Translate 'good morning' to Spanish."}, {"role": "user", "content": "Please."}, {"role": "assistant", "content": "Buenos dias."}]}
+{"messages": [{"role": "user", "content": "List the steps to boil an egg."}, {"role": "assistant", "content": "Here are the steps:"}]}
+{"messages": [{"role": "user", "content": "Is 17 prime?"}, {"role": "assistant", "content": ""}]}
+{"messages": [{"role": "user", "content": "Say hello."}, {"role": "assistant", "content": "Hello."}, {"role": "user", "content": "Again."}]}
+{"messages": [{"role": "user", "content": "What is the capital of  France?"}, {"role": "assistant", "content": "Paris is the capital."}]}
