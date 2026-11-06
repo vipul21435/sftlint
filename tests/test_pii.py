@@ -283,3 +283,16 @@ def test_assigned_secret_may_hold_symbols():
     assert found == [("high-entropy value assigned to 'password'", "Xk9#mQ2$vL7pR4nT8wZ1")]
     assert find_secrets("api_key=get_secret_from_vault(name)") == []
     assert find_secrets("token = load_token_from_disk_cache()") == []
+
+
+def test_card_written_two_ways_is_one_value():
+    text = "4111 1111 1111 1111 / 4111-1111-1111-1111"
+    conv = normalize(
+        {
+            "messages": [
+                {"role": "user", "content": text},
+                {"role": "assistant", "content": "Noted: 4111111111111111."},
+            ]
+        }
+    )
+    assert [f.turn for f in check_pii_card(conv)] == [0]

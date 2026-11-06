@@ -23,7 +23,8 @@
   ``example``, ``xxxx`` ...), and has Shannon entropy of at least 3.5 bits per
   character.
 
-Each distinct match is reported once per conversation, at the first turn it appears.
+Each distinct match is reported once per conversation, at the first turn it appears;
+card numbers are compared by their digits only.
 Tool-call arguments are scanned along with the text of each turn.
 """
 
@@ -226,16 +227,25 @@ def _looks_random(value: str) -> bool:
     return classes >= 2 and not _PLACEHOLDER.search(value)
 
 
-def _first_seen(conv: Conversation, finder: Callable[[str], list[str]]) -> list[tuple[int, str]]:
-    """``(turn, value)`` for each distinct value, at the first turn it occurs."""
+def _first_seen(
+    conv: Conversation,
+    finder: Callable[[str], list[str]],
+    key: Callable[[str], str] = lambda v: v,
+) -> list[tuple[int, str]]:
+    """``(turn, value)`` for each distinct value, at the first turn it occurs. Values
+    with the same ``key`` (a card number's digits) count as one."""
     seen: set[str] = set()
     out = []
     for i, m in enumerate(conv.messages):
         for value in finder(turn_text(m)):
-            if value not in seen:
-                seen.add(value)
+            if key(value) not in seen:
+                seen.add(key(value))
                 out.append((i, value))
     return out
+
+
+def _digits(value: str) -> str:
+    return re.sub(r"\D", "", value)
 
 
 def _mask(value: str) -> str:
@@ -254,7 +264,7 @@ def check_pii_email(conv: Conversation) -> list[Finding]:
 def check_pii_card(conv: Conversation) -> list[Finding]:
     return [
         Finding("pii-card", "warning", conv.line, f"Luhn-valid card number {_mask(c)}", i)
-        for i, c in _first_seen(conv, find_cards)
+        for i, c in _first_seen(conv, find_cards, _digits)
     ]
 
 
