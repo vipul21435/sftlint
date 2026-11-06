@@ -96,3 +96,16 @@ def test_property_own_type_and_enum_always_validate():
         assert validate(v, {"type": _type_name(v)}) == []
         assert validate(v, {"enum": [0, v]}) == []
         assert validate(v, {"anyOf": [{"type": _type_name(v)}, {"type": "null"}]}) == []
+
+
+def test_enum_and_const_compare_json_types():
+    assert validate(True, {"enum": [1]}) != []
+    assert validate(1, {"const": True}) != []
+    assert validate(False, {"enum": [0, None]}) != []
+    assert validate(1, {"enum": [1.0]}) == [] and validate(1.0, {"const": 1}) == []
+    assert validate(True, {"enum": [True]}) == []
+    assert validate([1, True], {"const": [1.0, True]}) == []
+    assert validate([True], {"const": [1]}) != []
+    assert validate({"a": 0}, {"enum": [{"a": False}]}) != []
+    assert validate({"a": 0}, {"enum": [{"a": 0.0}]}) == []
+    assert validate(None, {"enum": [None]}) == [] and validate("x", {"const": "x"}) == []

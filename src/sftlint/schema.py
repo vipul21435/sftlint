@@ -37,6 +37,21 @@ _TYPES = {
 }
 
 
+def _json_equal(a: Any, b: Any) -> bool:
+    """Equality as JSON Schema defines it for ``enum`` and ``const``: values of different
+    JSON types are never equal (``true`` is not ``1``), while ``1`` equals ``1.0``.
+    Arrays and objects compare element by element."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return isinstance(a, bool) and isinstance(b, bool) and a == b
+    if _TYPES["number"](a) or _TYPES["number"](b):
+        return _TYPES["number"](a) and _TYPES["number"](b) and a == b
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_json_equal(x, y) for x, y in zip(a, b, strict=True))
+    if isinstance(a, Mapping) and isinstance(b, Mapping):
+        return a.keys() == b.keys() and all(_json_equal(a[k], b[k]) for k in a)
+    return type(a) is type(b) and a == b
+
+
 def _type_name(value: Any) -> str:
     for name in ("null", "boolean", "integer", "number", "string", "array", "object"):
         if _TYPES[name](value):
@@ -69,9 +84,10 @@ def validate(value: Any, schema: Any, path: str = "$", depth: int = 0) -> list[s
             want = " or ".join(known)
             return [f"{path}: expected {want}, got {_type_name(value)}"]
 
-    if "enum" in schema and isinstance(schema["enum"], list) and value not in schema["enum"]:
-        errors.append(f"{path}: {_short(value)} is not one of {_short(schema['enum'])}")
-    if "const" in schema and value != schema["const"]:
+    enum = schema.get("enum")
+    if isinstance(enum, list) and not any(_json_equal(value, e) for e in enum):
+        errors.append(f"{path}: {_short(value)} is not one of {_short(enum)}")
+    if "const" in schema and not _json_equal(value, schema["const"]):
         errors.append(f"{path}: expected {_short(schema['const'])}")
 
     if isinstance(value, Mapping):
