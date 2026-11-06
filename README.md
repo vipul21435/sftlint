@@ -150,34 +150,36 @@ Matches are masked in reports (first and last two characters kept), and each dis
 
 ## Results on public data
 
-Three files from two public datasets, both under the Apache 2.0 licence as stated on their dataset cards (checked on the pages linked below). The data is not committed; `scripts/fetch_data.py` downloads it (about 52 MB) into `./data`, which git ignores.
+Four files from three public datasets, all under the Apache 2.0 licence as stated on their dataset cards (checked on the pages linked below). The data is not committed; `scripts/fetch_data.py` downloads it (about 54 MB) into `./data`, which git ignores.
 
 ```
 uv run python scripts/fetch_data.py --out data --rows 2000
 uv run sftlint check data/smoltalk-magpie-ultra.jsonl --json data/smoltalk-magpie-ultra.report.json
 uv run sftlint check data/hermes-func-calling-singleturn.jsonl --json data/hermes-func-calling-singleturn.report.json
 uv run sftlint check data/hermes-func-calling.jsonl --json data/hermes-func-calling.report.json
+uv run sftlint check data/aya-test.jsonl --json data/aya-test.report.json
 ```
 
-| rule | smoltalk slice | Hermes single-turn | Hermes multi-turn |
-|---|---:|---:|---:|
-| records | 2,000 | 1,893 | 1,893 |
-| records with findings | 78 | 995 | 1,050 |
-| `tool-args-json` | 0 | 793 | 793 |
-| `tool-args-schema` | 0 | 76 | 76 |
-| `tool-result-match` | 0 | 0 | 263 |
-| `role-order` | 0 | 0 | 10 |
-| `final-role` | 0 | 0 | 163 |
-| `truncated-final` | 5 | 0 | 0 |
-| `duplicate-turn` | 3 | 0 | 0 |
-| `pii-email` | 0 | 62 | 82 |
-| `pii-card` | 0 | 2 | 3 |
-| `secret-key` | 0 | 0 | 3 |
-| `length-outlier` | 76 | 125 | 167 |
-| `refusal` | 0 | 0 | 0 |
-| `language-mix` | 0 | 0 | 0 |
-| every other rule | 0 | 0 | 0 |
-| exit code | 0 | 1 | 1 |
+| rule | smoltalk slice | Hermes single-turn | Hermes multi-turn | Aya test |
+|---|---:|---:|---:|---:|
+| records | 2,000 | 1,893 | 1,893 | 1,750 |
+| records with findings | 78 | 995 | 1,050 | 51 |
+| `tool-args-json` | 0 | 793 | 793 | 0 |
+| `tool-args-schema` | 0 | 76 | 76 | 0 |
+| `tool-result-match` | 0 | 0 | 263 | 0 |
+| `role-order` | 0 | 0 | 10 | 0 |
+| `final-role` | 0 | 0 | 163 | 0 |
+| `truncated-final` | 5 | 0 | 0 | 4 |
+| `duplicate-turn` | 3 | 0 | 0 | 0 |
+| `duplicate-prompt` | 0 | 0 | 0 | 10 |
+| `pii-email` | 0 | 62 | 82 | 0 |
+| `pii-card` | 0 | 2 | 3 | 0 |
+| `secret-key` | 0 | 0 | 3 | 0 |
+| `length-outlier` | 76 | 125 | 167 | 34 |
+| `refusal` | 0 | 0 | 0 | 1 |
+| `language-mix` | 0 | 0 | 0 | 2 |
+| every other rule | 0 | 0 | 0 | 0 |
+| exit code | 0 | 1 | 1 | 0 |
 
 **smoltalk, `smol-magpie-ultra` subset, first 2,000 train rows** ([dataset card](https://huggingface.co/datasets/HuggingFaceTB/smoltalk); the card states the Smol-Magpie-Ultra subset is Apache 2.0). Format detected: `messages`. All five `truncated-final` findings are unclosed code fences, and reading them shows each answer stops in the middle of code (for example a list literal ending in `4.7,`). The three `duplicate-turn` findings are repeated user turns such as "Would you continue with more ideas?". No answer opens with a refusal phrase, and all 2,000 answers are in Latin script. The median prompt (all turns before the last answer) is 4,436.5 characters and the median response 2,179.
 
@@ -204,6 +206,28 @@ data/hermes-func-calling.fixed.jsonl: 1725 records, format sharegpt, 0 with find
 ```
 
 The 158 records that end on a tool turn are the same records whose tool turn answers calls that were not made, so they are dropped; the 5 others ending on a tool turn are trimmed back to their call turn.
+
+**aya_dataset, test split, all 1,750 rows** ([dataset card](https://huggingface.co/datasets/CohereLabs/aya_dataset), Apache 2.0): human-written prompt/completion pairs, 250 in each of seven languages. Format detected: `prompt-completion`. The 10 `duplicate-prompt` findings are prompts written twice: 5 with the same answer both times, 5 with a different one. Of the 4 `truncated-final` findings, two Turkish answers end on a list separator after a heading or item, and one English answer ends "The following would be the cross:" with no cross after it; the fourth, a Portuguese list whose last item ends in `;`, is a false positive. The one `refusal` is "I won't answer that question." to a request for bomb-making instructions.
+
+Because every record carries a language label, the run also shows what the script detector does per language:
+
+```
+uv run python scripts/script_by_language.py data/aya-test.jsonl
+```
+
+| language | records | dominant script of answers | language-mix |
+|---|---:|---|---:|
+| English | 250 | Latin 215, none 34, Devanagari 1 | 0 |
+| Portuguese | 250 | Latin 196, none 54 | 0 |
+| Simplified Chinese | 250 | Han 191, none 58, Latin 1 | 0 |
+| Standard Arabic | 250 | Arabic 210, none 40 | 0 |
+| Telugu | 250 | Telugu 194, none 55, Latin 1 | 1 |
+| Turkish | 250 | Latin 247, none 2, Arabic 1 | 1 |
+| Yoruba | 250 | Latin 243, none 7 | 0 |
+
+"none" is an answer with fewer than 20 letters or no script holding 60 % of them, mostly short answers. `language-mix` flags 2 of 1,750 records: a Telugu question whose answer is mostly Latin-letter algebra (`px + q = 0 ⇒ ...`), a false positive, and a Turkish question asking what an Ottoman word means, answered with a dictionary entry in Arabic script, which is a real change of script that the question asked for. Neither is an answer in the wrong language. The answers here are human-written in the prompt's language, so this split mostly measures false positives: 2 in 1,750.
+
+An earlier version of `truncated-final` also flagged a Telugu answer key ending `iv-a` (the last word `a`) and a Telugu verse ending in `||`; both were fixed in the rule after this run showed them, so the 4 above are counted after the fix.
 
 **Pretokens against a real tokenizer.** On the smoltalk slice, `--tokenizer tiktoken:cl100k_base` (`uv run --with tiktoken sftlint check data/smoltalk-magpie-ultra.jsonl --tokenizer tiktoken:cl100k_base --json data/smoltalk-magpie-ultra.cl100k.json`) gives a mean of 984.9 prompt tokens and 436.8 response tokens, against 989.2 and 438.4 pretokens: the means differ by 0.4 %. The maxima differ more (4,341 against 4,533 prompt tokens), so treat pretokens as an estimate for cl100k_base, not a bound.
 
