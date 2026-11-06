@@ -21,13 +21,27 @@ def _ids(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
+def _rate(value: str) -> float:
+    rate = float(value)
+    if not 0.0 <= rate <= 1.0:
+        raise argparse.ArgumentTypeError(f"{value} is not between 0 and 1")
+    return rate
+
+
+def _non_negative(value: str) -> int:
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"{value} is negative")
+    return n
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sftlint", description=__doc__)
     parser.add_argument("--version", action="version", version=f"sftlint {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     check = sub.add_parser("check", help="lint a JSONL file")
-    check.add_argument("path")
+    check.add_argument("path", help="JSONL file to lint")
     check.add_argument("--format", default="auto", choices=("auto", *FORMATS))
     check.add_argument("--select", type=_ids, help="comma-separated rule ids to run")
     check.add_argument("--ignore", type=_ids, help="comma-separated rule ids to skip")
@@ -46,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check.add_argument(
         "--max-refusal-rate",
-        type=float,
+        type=_rate,
         metavar="RATE",
         help="add a refusal-rate error when this share of answers refuse (0 to 1; off by default)",
     )
@@ -62,13 +76,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--fix-rules", type=_ids, help="comma-separated rule ids whose findings --fix acts on"
     )
     check.add_argument(
-        "--max-examples", type=int, default=20, help="findings listed in reports (default 20)"
+        "--max-examples",
+        type=_non_negative,
+        default=20,
+        help="findings listed in reports (default 20)",
     )
 
     sub.add_parser("rules", help="list rule ids, default severities and summaries")
 
     detect = sub.add_parser("detect", help="print the detected format of a JSONL file")
-    detect.add_argument("path")
+    detect.add_argument("path", help="JSONL file to inspect")
     detect.add_argument("--format", default="auto", choices=("auto", *FORMATS))
     return parser
 
@@ -106,10 +123,14 @@ def _cmd_check(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         print(f"sftlint: {exc}", file=sys.stderr)
         return 2
-    if args.json:
-        _write(args.json, to_json(report, args.max_examples))
-    if args.markdown:
-        _write(args.markdown, to_markdown(report, args.max_examples))
+    try:
+        if args.json:
+            _write(args.json, to_json(report, args.max_examples))
+        if args.markdown:
+            _write(args.markdown, to_markdown(report, args.max_examples))
+    except OSError as exc:
+        print(f"sftlint: {exc}", file=sys.stderr)
+        return 2
     if "-" not in (args.json, args.markdown):
         sev = report.severity_counts()
         print(
@@ -134,7 +155,11 @@ def _cmd_rules() -> int:
 
 
 def _cmd_detect(args: argparse.Namespace) -> int:
-    data = load(args.path, args.format)
+    try:
+        data = load(args.path, args.format)
+    except (OSError, ValueError) as exc:
+        print(f"sftlint: {exc}", file=sys.stderr)
+        return 2
     print(f"format: {data.fmt or 'unknown'}")
     print(f"records: {data.records}")
     print(f"normalised: {len(data.conversations)}")

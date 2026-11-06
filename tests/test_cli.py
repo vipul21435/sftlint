@@ -76,3 +76,30 @@ def test_cli_rules_lists_every_rule(capsys):
     out = capsys.readouterr().out
     for rid in ("role-order", "truncated-final", "duplicate-prompt", "length-outlier"):
         assert rid in out
+
+
+def test_cli_detect_reports_io_errors(tmp_path, capsys):
+    assert main(["detect", str(tmp_path / "missing.jsonl")]) == 2
+    bad = tmp_path / "latin1.jsonl"
+    bad.write_bytes(b'{"prompt": "caf\xe9", "completion": "ok"}\n')
+    assert main(["detect", str(bad)]) == 2
+    assert main(["check", str(bad)]) == 2
+    err = capsys.readouterr().err
+    assert err.count("sftlint:") == 3 and "Traceback" not in err
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [["--max-refusal-rate", "-1"], ["--max-refusal-rate", "1.5"], ["--max-examples", "-3"]],
+)
+def test_cli_rejects_out_of_range_values(write_jsonl, flags, capsys):
+    path = str(write_jsonl(ROWS))
+    with pytest.raises(SystemExit) as exc:
+        main(["check", path, *flags])
+    assert exc.value.code == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_cli_report_write_error_exits_2(write_jsonl, tmp_path):
+    path = str(write_jsonl(ROWS))
+    assert main(["check", path, "--json", str(tmp_path / "no" / "dir" / "r.json")]) == 2
