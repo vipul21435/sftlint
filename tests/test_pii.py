@@ -276,3 +276,10 @@ def test_find_emails_is_linear_on_dotted_runs():
     start = time.perf_counter()
     assert find_emails("a." * 50000) == []
     assert time.perf_counter() - start < 1.0
+
+
+def test_assigned_secret_may_hold_symbols():
+    found = find_secrets('password = "Xk9#mQ2$vL7pR4nT8wZ1"')
+    assert found == [("high-entropy value assigned to 'password'", "Xk9#mQ2$vL7pR4nT8wZ1")]
+    assert find_secrets("api_key=get_secret_from_vault(name)") == []
+    assert find_secrets("token = load_token_from_disk_cache()") == []

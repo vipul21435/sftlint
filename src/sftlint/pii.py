@@ -91,7 +91,7 @@ _PREFIXED_SECRETS = [
 ]
 _ASSIGNED_SECRET = re.compile(
     r"(?i)\b(api[_-]?key|secret(?:[_-]?key)?|access[_-]?token|auth[_-]?token|token|"
-    r"password|passwd)\b[\"']?\s*[:=]\s*[\"']?([A-Za-z0-9_\-+/=.]{20,})"
+    r"password|passwd)\b[\"']?\s*[:=]\s*[\"']?([^\s\"'`,;()\[\]{}<>]{20,})"
 )
 
 
