@@ -237,3 +237,23 @@ def test_find_ibans_in_text_and_rule():
     )
     found = check_pii_iban(conv)
     assert len(found) == 1 and found[0].turn == 0 and nl not in found[0].message
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "api_key = settings.OPENAI_API_KEY",
+        "token = request.headers.Authorization",
+        "password = self.cleaned_data.Password1",
+        "api_key = PAYMENTS_API_KEY_2024",
+        "```python\nclient = Client(api_key=config.secrets.payment_api_key_v2)\n```",
+    ],
+)
+def test_names_assigned_to_key_like_names_are_not_secrets(text):
+    assert find_secrets(text) == []
+
+
+def test_random_values_with_dots_are_still_secrets():
+    jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5NXgL0n3I9P"
+    assert find_secrets(f"token = {jwt}")
+    assert find_secrets("secret = Zk3qP9vLm2Xw8RtY5nBc7HdJ")

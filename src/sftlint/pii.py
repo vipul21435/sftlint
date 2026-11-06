@@ -16,9 +16,11 @@
   API keys, personal access tokens, chat-app bot tokens, hosted-model API keys,
   model-hub tokens, live payment API keys, PEM private-key headers), or a value
   assigned to a key-like name (``api_key = ...``, ``token: ...``) that is at least 20
-  characters long, mixes at least two of lower case, upper case and digits, contains
-  no placeholder word (``your``, ``example``, ``xxxx`` ...), and has Shannon entropy
-  of at least 3.5 bits per character.
+  characters long, is not a name (an attribute path such as ``settings.API_KEY`` or an
+  environment-variable name such as ``PAYMENTS_API_KEY``), mixes at least two of
+  lower case, upper case and digits, contains no placeholder word (``your``,
+  ``example``, ``xxxx`` ...), and has Shannon entropy of at least 3.5 bits per
+  character.
 
 Each distinct match is reported once per conversation, at the first turn it appears.
 Tool-call arguments are scanned along with the text of each turn.
@@ -175,10 +177,17 @@ def find_secrets(text: str, min_entropy: float = 3.5) -> list[tuple[str, str]]:
     out = [(label, m.group(0)) for label, rx in _PREFIXED_SECRETS for m in rx.finditer(text)]
     for m in _ASSIGNED_SECRET.finditer(text):
         name, value = m.group(1), m.group(2)
+        if _NAME_VALUE.fullmatch(value):
+            continue
         if _looks_random(value) and shannon_entropy(value) >= min_entropy:
             out.append((f"high-entropy value assigned to {name!r}", value))
     return out
 
+
+# Code that reads a key instead of holding one: an attribute path rooted at a lower-case
+# name (``settings.API_KEY``, ``self.cleaned_data.Password1``) or an upper-case
+# environment-variable name with underscores (``PAYMENTS_API_KEY_2024``).
+_NAME_VALUE = re.compile(r"[a-z_][a-z0-9_]*(?:\.[A-Za-z_]\w*)+|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+")
 
 _PLACEHOLDER = re.compile(r"(?i)your|example|placeholder|replace|xxxx|dummy|sample|here")
 
