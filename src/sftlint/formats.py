@@ -194,10 +194,19 @@ def _call_from_obj(item: Any) -> ToolCall:
     if not isinstance(item, Mapping):
         return ToolCall(None, item, parse_error="call is not a JSON object")
     fn = item.get("function")
-    if isinstance(fn, Mapping):
-        return ToolCall(fn.get("name"), fn.get("arguments"), id=item.get("id"))
-    args = item.get("arguments", item.get("parameters"))
-    return ToolCall(item.get("name"), args, id=item.get("id"))
+    src = fn if isinstance(fn, Mapping) else item
+    args = (
+        fn.get("arguments")
+        if isinstance(fn, Mapping)
+        else item.get("arguments", item.get("parameters"))
+    )
+    name, cid = src.get("name"), item.get("id")
+    # A name or id that is not a string (a list, a number) is treated as absent.
+    return ToolCall(
+        name if isinstance(name, str) else None,
+        args,
+        id=cid if isinstance(cid, str) else None,
+    )
 
 
 def _parse_function_call(value: str) -> list[ToolCall]:

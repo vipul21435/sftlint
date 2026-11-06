@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from collections.abc import Sequence
 
@@ -26,6 +27,13 @@ def _rate(value: str) -> float:
     if not 0.0 <= rate <= 1.0:
         raise argparse.ArgumentTypeError(f"{value} is not between 0 and 1")
     return rate
+
+
+def _positive(value: str) -> float:
+    x = float(value)
+    if not (math.isfinite(x) and x > 0):
+        raise argparse.ArgumentTypeError(f"{value} is not a finite number above 0")
+    return x
 
 
 def _non_negative(value: str) -> int:
@@ -56,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 1 when a finding of this severity or worse exists (default: error)",
     )
     check.add_argument(
-        "--outlier-z", type=float, default=3.5, help="modified z threshold (default 3.5)"
+        "--outlier-z", type=_positive, default=3.5, help="modified z threshold (default 3.5)"
     )
     check.add_argument(
         "--max-refusal-rate",
@@ -169,11 +177,15 @@ def _cmd_detect(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.command == "check":
-        return _cmd_check(args)
     if args.command == "rules":
         return _cmd_rules()
-    return _cmd_detect(args)
+    try:
+        return _cmd_check(args) if args.command == "check" else _cmd_detect(args)
+    except Exception as exc:  # a bug: report it in one line rather than a traceback
+        print(
+            f"sftlint: internal error on {args.path}: {type(exc).__name__}: {exc}", file=sys.stderr
+        )
+        return 2
 
 
 if __name__ == "__main__":  # pragma: no cover

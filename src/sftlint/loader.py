@@ -33,6 +33,8 @@ def iter_jsonl(path: str | Path) -> Iterator[tuple[int, Any, str | None]]:
                 yield lineno, json.loads(text), None
             except json.JSONDecodeError as exc:
                 yield lineno, None, f"invalid JSON: {exc.msg} at column {exc.colno}"
+            except RecursionError:
+                yield lineno, None, "invalid JSON: nested too deeply to parse"
 
 
 def load(path: str | Path, fmt: str = "auto") -> Dataset:

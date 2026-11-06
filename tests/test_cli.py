@@ -103,3 +103,44 @@ def test_cli_rejects_out_of_range_values(write_jsonl, flags, capsys):
 def test_cli_report_write_error_exits_2(write_jsonl, tmp_path):
     path = str(write_jsonl(ROWS))
     assert main(["check", path, "--json", str(tmp_path / "no" / "dir" / "r.json")]) == 2
+
+
+def test_non_string_tool_name_is_a_finding_not_a_crash(write_jsonl, capsys):
+    rec = {
+        "messages": [
+            {"role": "user", "content": "q"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"function": {"name": ["f"], "arguments": "{}"}}],
+            },
+        ],
+        "tools": [{"name": "f"}],
+    }
+    assert main(["check", str(write_jsonl([rec]))]) == 1
+    assert "tool-unknown" in capsys.readouterr().out
+
+
+def test_deeply_nested_line_is_a_json_parse_finding(write_jsonl, capsys):
+    path = write_jsonl(["[" * 200000 + "]" * 200000])
+    assert main(["check", str(path)]) == 1
+    assert "json-parse" in capsys.readouterr().out
+
+
+def test_unexpected_error_is_one_line(write_jsonl, monkeypatch, capsys):
+    import sftlint.cli
+
+    def boom(*args, **kwargs):
+        raise KeyError("x")
+
+    monkeypatch.setattr(sftlint.cli, "lint", boom)
+    path = str(write_jsonl(ROWS))
+    assert main(["check", path]) == 2
+    assert capsys.readouterr().err.startswith(f"sftlint: internal error on {path}: KeyError")
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-1", "0"])
+def test_cli_rejects_bad_outlier_z(write_jsonl, value, capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["check", str(write_jsonl(ROWS)), "--outlier-z", value])
+    assert exc.value.code == 2
