@@ -114,6 +114,7 @@ Tool calls are read from an OpenAI-style `tool_calls` list (arguments as a JSON 
 | `length-outlier` | info | a prompt or response length that is a robust outlier for the file | catches empty-ish and runaway records without a fixed limit |
 | `pii-email` | warning | an email address outside reserved domains and placeholder local parts | personal data in training text |
 | `pii-card` | warning | 13 to 19 digits starting 2 to 6 that pass the Luhn checksum | payment card numbers |
+| `pii-iban` | warning | an IBAN of the right length for its country that passes the mod-97 check | bank account numbers |
 | `secret-key` | error | a known credential prefix, a PEM private-key header, or a high-entropy value assigned to a key-like name | credentials in training text get memorised |
 | `tool-args-json` | error | a tool call that cannot be read, or whose arguments are not a JSON object | the OpenAI function-calling guide defines arguments as JSON-encoded; a call that does not parse trains the model to emit calls a client cannot run |
 | `tool-unknown` | error | a call to a function the record does not declare | the model learns to call tools it was never shown |
@@ -134,6 +135,7 @@ A record is flagged when `|M_i| > 3.5` (the cut-off the NIST handbook quotes fro
 
 - Email: domains reserved for documentation and testing by RFC 2606 and RFC 6761 (`example.com`, `.test`, `.invalid`, `localhost`) are skipped, as are local parts such as `your-email` or `recipient`.
 - Card numbers: digits may be grouped by single spaces or hyphens; the first digit must be 2 to 6 (the card-network industry identifiers of ISO/IEC 7812, which also keeps ISBN-13 numbers out), the digits must not all be the same, and the Luhn checksum must hold: double every second digit from the right, subtract 9 from any result above 9, and require the total to be divisible by 10.
+- IBANs: two capital letters, two check digits and an account part, solid or in groups of four. The total length must be the one the IBAN format table gives for that country code, and the check must hold: move the first four characters to the end, replace each letter by two digits (A = 10, ..., Z = 35), and require the number to leave remainder 1 on division by 97. Tests check the published example `GB82 WEST 1234 5698 7654 32` and that every single-character change to a generated IBAN fails the check.
 - Secrets: fixed prefixes match directly: cloud access key ids and API keys, personal access tokens, chat-app bot tokens, hosted-model API keys, model-hub access tokens, live payment API keys (test-mode keys are not flagged) and PEM private-key headers. The prefix shapes are simplified from the public gitleaks rule set (`config/gitleaks.toml`). A value assigned to a name such as `api_key`, `token` or `password` must be at least 20 characters, mix at least two of lower case, upper case and digits, contain no placeholder word (`your`, `example`, `xxxx` ...), and have Shannon entropy `H = -sum p_c log2 p_c` of at least 3.5 bits per character.
 
 Matches are masked in reports (first and last two characters kept), and each distinct matched value is reported once per conversation, so two different tokens of the same kind give two findings.
@@ -254,7 +256,7 @@ Known behaviour:
 - `truncated-final` is a heuristic. A final Markdown table row (a last line that starts and ends with `|`), a last word ending in `++` and a final URL ending in `/` are treated as complete. Still flagged: an answer that legitimately ends with a colon, a semicolon-terminated list item, a formula ending in an operator, a pipe that does not close a table row, and a code answer that closes its fence with four backticks. An answer cut at a sentence boundary is not caught. Rerunning the four files above after the table, `++` and URL exceptions were added gave the same counts.
 - `duplicate-prompt` is exact. Prompts that differ by one character are not duplicates here.
 - `length-outlier` is relative to the file: in a file that is mostly broken, the broken records are the norm.
-- `pii-*` and `secret-key` are pattern matches with validation, not a PII classifier. Names, phone numbers and postal addresses are not detected.
+- `pii-*` and `secret-key` are pattern matches with validation, not a PII classifier. Names, phone numbers and postal addresses are not detected. No IBAN occurs in the four files above, so `pii-iban` is tested on fixtures only.
 - `pretokens` is close to a lower bound only for GPT-2's tokenizer; for others it is an approximation (measured above for cl100k_base).
 
 ## Related tools
@@ -277,6 +279,7 @@ Known behaviour:
 - Unicode Standard Annex #24, Unicode Script Property: https://www.unicode.org/reports/tr24/
 - NIST/SEMATECH e-Handbook of Statistical Methods, 1.3.5.17 Detection of Outliers (modified z-score): https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm
 - Luhn algorithm: https://en.wikipedia.org/wiki/Luhn_algorithm
+- International Bank Account Number (check-digit validation, length by country): https://en.wikipedia.org/wiki/International_Bank_Account_Number
 - ISO/IEC 7812 (issuer identification numbers): https://en.wikipedia.org/wiki/ISO/IEC_7812
 - gitleaks, default secret-detection rules: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
 - RFC 2606, Reserved Top Level DNS Names: https://www.rfc-editor.org/rfc/rfc2606

@@ -9,6 +9,9 @@
   start with a digit from 2 to 6 (the card-network industry identifiers), pass the
   Luhn checksum, and do not consist of one repeated digit. A digit run that touches
   a letter, digit, underscore or hyphen is skipped as part of an identifier.
+* ``pii-iban``: an International Bank Account Number: a country code, two check
+  digits and an account part, written solid or in groups of four, whose length is the
+  one listed for that country and whose ISO 7064 mod-97 check gives 1.
 * ``secret-key``: a string with a known credential prefix (cloud access key ids and
   API keys, personal access tokens, chat-app bot tokens, hosted-model API keys,
   model-hub tokens, live payment API keys, PEM private-key headers), or a value
@@ -43,6 +46,24 @@ _CARD_FIRST_DIGITS = "23456"
 # A digit run glued to letters or underscores (a hex object id, a hash, a variable
 # name) is part of an identifier, not a card number written out.
 _CARD = re.compile(r"(?<![\w-])(?:\d[ -]?){12,18}\d(?![\w-])")
+
+# IBAN length per country code, from the format table on the Wikipedia IBAN page.
+_IBAN_LENGTHS = {
+    cc: int(n)
+    for cc, n in (
+        item.split(":")
+        for item in (
+            "AL:28 AD:24 AT:20 AZ:28 BH:22 BY:28 BE:16 BA:20 BR:29 BG:22 BI:27 CR:22 HR:21 "
+            "CY:28 CZ:24 DK:18 DJ:27 DO:28 TL:23 EG:29 SV:28 EE:20 FK:18 FO:18 FI:18 FR:27 "
+            "GE:22 DE:22 GI:23 GR:27 GL:18 GT:28 HN:28 HU:28 IS:26 IQ:23 IE:22 IL:23 IT:27 "
+            "JO:30 KZ:20 XK:20 KW:30 LV:21 LB:28 LY:25 LI:21 LT:20 LU:20 MT:31 MR:27 MU:30 "
+            "MC:27 MD:24 MN:20 ME:22 NL:18 NI:28 MK:19 NO:15 OM:23 PK:24 PS:29 PL:28 PT:25 "
+            "QA:29 RO:24 RU:33 LC:32 SM:27 ST:25 SA:24 RS:22 SC:31 SK:24 SI:19 SO:23 ES:24 "
+            "SD:18 SE:24 CH:21 TN:24 TR:26 UA:29 AE:23 GB:22 VA:22 VG:24 YE:30"
+        ).split()
+    )
+}
+_IBAN = re.compile(r"(?<![\w-])[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?(?![\w-])")
 
 # Prefix shapes follow the public gitleaks rule set (config/gitleaks.toml), simplified:
 # the fixed prefix and a minimum length are enough to keep false positives rare.
@@ -133,6 +154,22 @@ def find_cards(text: str) -> list[str]:
     return out
 
 
+def iban_valid(iban: str) -> bool:
+    """ISO 7064 mod 97-10 as IBAN uses it: move the first four characters to the end,
+    replace each letter by two digits (A = 10 ... Z = 35), and require the number to
+    leave remainder 1 on division by 97. The length must match the country's."""
+    code = iban.replace(" ", "")
+    if _IBAN_LENGTHS.get(code[:2]) != len(code) or not code.isalnum() or not code.isascii():
+        return False
+    rearranged = code[4:] + code[:4]
+    return int("".join(str(int(ch, 36)) for ch in rearranged)) % 97 == 1
+
+
+def find_ibans(text: str) -> list[str]:
+    """Each IBAN in ``text`` that passes `iban_valid`, with grouping spaces removed."""
+    return [m.group(0).replace(" ", "") for m in _IBAN.finditer(text) if iban_valid(m.group(0))]
+
+
 def find_secrets(text: str, min_entropy: float = 3.5) -> list[tuple[str, str]]:
     """Return ``(description, matched value)`` for each secret-like string found."""
     out = [(label, m.group(0)) for label, rx in _PREFIXED_SECRETS for m in rx.finditer(text)]
@@ -182,6 +219,14 @@ def check_pii_card(conv: Conversation) -> list[Finding]:
     return [
         Finding("pii-card", "warning", conv.line, f"Luhn-valid card number {_mask(c)}", i)
         for i, c in _first_seen(conv, find_cards)
+    ]
+
+
+@rule("pii-iban", "warning", "a turn contains an IBAN that passes its mod-97 check")
+def check_pii_iban(conv: Conversation) -> list[Finding]:
+    return [
+        Finding("pii-iban", "warning", conv.line, f"IBAN {_mask(b)}", i)
+        for i, b in _first_seen(conv, find_ibans)
     ]
 
 

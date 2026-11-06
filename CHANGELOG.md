@@ -8,7 +8,7 @@
 - Tool rules: `tool-args-json`, `tool-unknown`, `tool-args-schema` (a dependency-free JSON Schema subset), `tool-result-match`.
 - Content rules: `refusal` (phrase match, with the refusal rate in the report), the `refusal-rate` gate behind `--max-refusal-rate`, and `language-mix` (dominant Unicode script of answer against user turn).
 - Dataset rules: `duplicate-prompt` (exact) and `length-outlier` (modified z-score on log length).
-- PII and secret rules: `pii-email`, `pii-card` (Luhn), `secret-key` (prefixes and entropy), reading tool-call arguments as well as text.
+- PII and secret rules: `pii-email`, `pii-card` (Luhn), `pii-iban` (mod 97), `secret-key` (prefixes and entropy), reading tool-call arguments as well as text.
 - `sftlint check` with Markdown and JSON reports, `--select`, `--ignore`, `--fail-on` exit codes, `--fix` with `--fix-rules`, and `--tokenizer` (`pretokens` or optional tiktoken); `sftlint rules`; `sftlint detect`.
 - Per-field character, word and token length statistics.
 - Fetch script, length chart script, and measured results on public smoltalk and Hermes function-calling files.

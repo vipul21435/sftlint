@@ -7,10 +7,13 @@ from sftlint.formats import normalize
 from sftlint.pii import (
     check_pii_card,
     check_pii_email,
+    check_pii_iban,
     check_secret_key,
     find_cards,
     find_emails,
+    find_ibans,
     find_secrets,
+    iban_valid,
     luhn_valid,
     shannon_entropy,
 )
@@ -193,3 +196,44 @@ def test_tool_call_arguments_are_scanned():
     )
     out = check_pii_email(c)
     assert len(out) == 1 and out[0].turn == 1
+
+
+def make_iban(country: str, bban: str) -> str:
+    """Compute the two check digits for ``country`` + ``bban`` (98 - mod 97)."""
+    digits = "".join(str(int(ch, 36)) for ch in bban + country + "00")
+    return f"{country}{98 - int(digits) % 97:02d}{bban}"
+
+
+def test_iban_published_example_and_check_digits():
+    example = "GB82 WEST 1234 5698 7654 32"  # the fictitious example on the IBAN page
+    assert iban_valid(example) and iban_valid(example.replace(" ", ""))
+    assert make_iban("GB", "WEST12345698765432") == "GB82WEST12345698765432"
+    assert not iban_valid("GB83WEST12345698765432")
+    assert not iban_valid("GB82WEST1234569876543")  # one character short for GB
+    assert not iban_valid("ZZ82WEST12345698765432")  # unknown country code
+
+
+def test_iban_detects_every_single_character_change():
+    iban = make_iban("DE", rand(string.digits, 18))
+    assert iban_valid(iban)
+    for i in range(4, len(iban)):
+        for d in string.digits:
+            if d != iban[i]:
+                assert not iban_valid(iban[:i] + d + iban[i + 1 :])
+
+
+def test_find_ibans_in_text_and_rule():
+    nl = make_iban("NL", "TEST" + rand(string.digits, 10))
+    grouped = " ".join(nl[i : i + 4] for i in range(0, len(nl), 4))
+    assert find_ibans(f"Send it to {grouped}.") == [nl]
+    assert find_ibans(f"ref{nl}") == [] and find_ibans(nl.lower()) == []
+    conv = normalize(
+        {
+            "messages": [
+                {"role": "user", "content": f"My IBAN is {grouped}"},
+                {"role": "assistant", "content": f"Noted: {nl}."},
+            ]
+        }
+    )
+    found = check_pii_iban(conv)
+    assert len(found) == 1 and found[0].turn == 0 and nl not in found[0].message
