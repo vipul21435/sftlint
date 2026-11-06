@@ -23,8 +23,9 @@ class Dataset:
 
 
 def iter_jsonl(path: str | Path) -> Iterator[tuple[int, Any, str | None]]:
-    """Yield ``(line_number, object, error)`` for each non-blank line."""
-    with open(path, encoding="utf-8") as fh:
+    """Yield ``(line_number, object, error)`` for each non-blank line. A leading UTF-8
+    byte-order mark is skipped."""
+    with open(path, encoding="utf-8-sig") as fh:
         for lineno, text in enumerate(fh, start=1):
             if not text.strip():
                 continue

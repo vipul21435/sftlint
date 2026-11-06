@@ -32,3 +32,15 @@ def test_cli_detect(write_jsonl, capsys):
     assert main(["detect", str(path)]) == 0
     assert "format: alpaca" in capsys.readouterr().out
     assert main(["detect", str(write_jsonl([{"t": 1}], "b.jsonl"))]) == 1
+
+
+def test_utf8_byte_order_mark_is_accepted(tmp_path):
+    path = tmp_path / "bom.jsonl"
+    rec = '{"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"Hello."}]}'
+    path.write_bytes(b"\xef\xbb\xbf" + rec.encode() + b"\n" + rec.replace("hi", "yo").encode())
+    data = load(path)
+    assert data.fmt == "messages" and data.findings == [] and len(data.conversations) == 2
+    out = tmp_path / "out.jsonl"
+    args = ["check", str(path), "--fix", str(out), "--fix-rules", "empty-turn"]
+    assert main(args) == 0
+    assert out.read_bytes().startswith(b'{"messages"')

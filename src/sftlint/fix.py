@@ -103,7 +103,7 @@ def apply_fixes(
     out_dir = os.path.dirname(os.path.abspath(out))
     fd, tmp = tempfile.mkstemp(prefix=".sftlint-", suffix=".tmp", dir=out_dir)
     try:
-        with open(path, encoding="utf-8") as src, open(fd, "w", encoding="utf-8") as dst:
+        with open(path, encoding="utf-8-sig") as src, open(fd, "w", encoding="utf-8") as dst:
             _copy_fixed(src, dst, by_line, convs, result)
         umask = os.umask(0)
         os.umask(umask)
